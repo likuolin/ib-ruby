@@ -12,7 +12,8 @@ module IB
     # 2. :symbol => "USD" For combo Contract, this is an arbitrary value (like "USD")
 
     validates_format_of :sec_type, :with => /\Abag\z/, :message => "should be a bag"
-    validates_format_of :right, :with => /\Anone\z/, :message => "should be none"
+    #does not work for VIX bag
+    #validates_format_of :right, :with => /\Anone\z/, :message => "should be none"
     validates_format_of :expiry, :with => /\A\z/, :message => "should be blank"
 
     def default_attributes
