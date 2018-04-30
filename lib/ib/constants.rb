@@ -2,6 +2,11 @@ module IB
   ### Widely used TWS constants:
 
   EOL = "\0"
+  # TWS_MAX is TWSMAX (transmitted from the TWS) minus the first digit (1)
+  # Anything bigger then TWS_MAX is considered as nil (in read_decimal @ messages/incomming/abstract_message.rb)
+  TWS_MAX = 79769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.0 
+  TWSMAX = 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000.0 
+  
 
   # Enumeration of bar size types for convenience.
   # Bar sizes less than 30 seconds do not work for some securities.
@@ -94,7 +99,39 @@ module IB
       54 => :trade_count, #             tickGeneric()
       55 => :trade_rate, #              tickGeneric()
       56 => :volume_rate, #             tickGeneric()
-      57 => :last_rth_trade, #            ?
+      57 => :last_rth_trade, #
+		  58 => :rt_historical_vol,
+      59 => :ib_dividends,
+      60 => :bond_factor_multiplier,
+      61 => :regulatory_imbalance,
+      62 => :news_tick,
+      63 => :short_term_volume_3_min,
+      64 => :short_term_volume_5_min,
+      65 => :short_term_volume_10_min,
+      66 => :delayed_bid,
+      67 => :delayed_ask,
+      68 => :delayed_last,
+      69 => :delayed_bid_size,
+      70 => :delayed_ask_size,
+      71 => :delayed_last_size,
+      72 => :delayed_high,
+      73 => :delayed_low,
+      74 => :delayed_volume,
+      75 => :delayed_close,
+      76 => :delayed_open,
+      77 => :rt_trd_volume,
+      78 => :creditman_mark_price,
+      79 => :creditman_slow_mark_price,
+      80 => :delayed_bid_option,
+      81 => :delayed_ask_option,
+      82 => :delayed_last_option,
+      83 => :delayed_model_option,
+      84 => :last_exch,
+      85 => :last_reg_time,
+      86 => :futures_open_interest,
+      87 => :avg_opt_volume,
+      88 => :not_set
+	
       #   Note 1: Tick types BID_OPTION, ASK_OPTION, LAST_OPTION, and MODEL_OPTION return
       #           all Greeks (delta, gamma, vega, theta), the underlying price and the
       #           stock and option reference price when requested.
@@ -118,7 +155,8 @@ module IB
       0 => :unknown,
       1 => :real_time,
       2 => :frozen,
-  }
+			3 => :delayed,
+			4 => :frozen_delayed }.freeze
 
   # Market depth messages contain these "operation" codes to tell you what to do with the data.
   # See also http://www.interactivebrokers.com/php/apiUsersGuide/apiguide/java/updatemktdepth.htm
@@ -143,19 +181,22 @@ module IB
        'MOC' => :market_on_close, #        Market-on-Close     MKTCLSL ?
        'MOO' => :market_on_open, #         Market-on-Open
        'MTL' => :market_to_limit, #        Market-to-Limit
-       'MKTPRT' => :market_protected, #   Market with Protection
+       'MKT PRT' => :market_protected, #   Market with Protection
        'QUOTE' => :request_for_quote, #    Request for Quote
        'STP' => :stop, #                   Stop
-       'STPLMT' => :stop_limit, #         Stop Limit
+       'STP LMT' => :stop_limit, #         Stop Limit
+       'STP PRT' => :stop_protected, #	   Stop with Protection
        'TRAIL' => :trailing_stop, #        Trailing Stop
        'TRAIL LIMIT' => :trailing_limit, # Trailing Stop Limit
        'TRAIL LIT' => :trailing_limit_if_touched, #  Trailing Limit if Touched
        'TRAIL MIT' => :trailing_market_if_touched, # Trailing Market If Touched
-       'PEG MKT' => :pegged_to_market, #   Pegged-to-Market
        'REL' => :relative, #               Relative
        'BOX TOP' => :box_top, #            Box Top
+       'PEG MKT' => :pegged_to_market, # Pegged-to-Market
+       'PEG STK' => :pegged_to_market, #   Pegged-to-Stock
        'PEG MID' => :pegged_to_midpoint, # Pegged-to-Midpoint
-       'VWAP' => :vwap, #                  VWAP-Guaranteed
+       'PEG BENCH' => :pegged_to_benchmark, # Pegged-to-Benmchmark # Vers. 102
+       'VWAP' => :vwap, #                  VWAP-Guaranted
        'OCA' => :one_cancels_all, #        One-Cancels-All
        'VOL' => :volatility, #             Volatility
        'SCALE' => :scale, #                Scale
@@ -165,16 +206,22 @@ module IB
 
   # Valid security types (sec_type attribute of IB::Contract)
   SECURITY_TYPES =
-      {'STK' => :stock,
-       'OPT' => :option,
-       'FUT' => :future,
-       'IND' => :index,
-       'FOP' => :futures_option,
-       'CASH' => :forex,
-       'BOND' => :bond,
-       'WAR' => :warrant,
-       'FUND' => :fund, # ETF?
-       'BAG' => :bag}.freeze
+    {	'BAG' =>  :bag,
+       'BOND' =>  :bond,
+       'CASH' =>  :forex,
+       'CMDTY'=>  :commodity,
+       'CFD'  =>  :cfd,
+       'FUT'  =>  :future,
+       'CONTFUT' => :continous_future,
+       'FUT+CONTFUT' => :all_futures,
+       'FOP'  =>  :futures_option,
+       'FUND' =>  :fund, # ETF?
+       'IND'  =>  :index,
+       'NEWS'  => :news,
+       'OPT'  =>  :option,
+       'IOPT' =>  :dutch_option,
+       'STK'  =>  :stock,
+       'WAR'  =>  :warrant}.freeze
 
   # Obtain symbolic value from given property code:
   # VALUES[:side]['B'] -> :buy
@@ -262,7 +309,9 @@ module IB
            'GAT' => :good_after_time,
            'GTD' => :good_till_date,
            'GTC' => :good_till_cancelled,
-           'IOC' => :immediate_or_cancel},
+           'IOC' => :immediate_or_cancel,
+	   'OPG' => :opening_price, 
+	   'AUC' => :at_auction},
 
       :rule_80a =>
           {'I' => :individual,

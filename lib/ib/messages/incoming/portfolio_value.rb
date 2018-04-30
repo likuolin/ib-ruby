@@ -2,36 +2,82 @@ module IB
   module Messages
     module Incoming
 
-      PortfolioValue = def_message [7, 7],
-                                   [:contract, :con_id, :int],
-                                   [:contract, :symbol, :string],
-                                   [:contract, :sec_type, :string],
-                                   [:contract, :expiry, :string],
-                                   [:contract, :strike, :decimal],
-                                   [:contract, :right, :string],
-                                   [:contract, :multiplier, :string],
-                                   [:contract, :primary_exchange, :string],
-                                   [:contract, :currency, :string],
-                                   [:contract, :local_symbol, :string],
-                                   [:position, :int],
-                                   [:market_price, :decimal],
-                                   [:market_value, :decimal],
-                                   [:average_cost, :decimal],
-                                   [:unrealized_pnl, :decimal_max], # May be nil!
-                                   [:realized_pnl, :decimal_max], #   May be nil!
-                                   [:account_name, :string]
-      class PortfolioValue
+			class ContractMessage < AbstractMessage
+				def contract
+					@contract = IB::Contract.build @data[:contract]
+				end
+			end
 
-        def contract
-          @contract = IB::Contract.build @data[:contract]
+			PortfolioValue = def_message [7, 8], ContractMessage,
+						[:contract, :contract], # read standard-contract 
+						[:portfolio_value, :position, :decimal],  
+						[:portfolio_value,:market_price, :decimal],
+						[:portfolio_value,:market_value, :decimal],
+						[:portfolio_value,:average_cost, :decimal],
+						[:portfolio_value,:unrealized_pnl, :decimal], # May be nil!
+						[:portfolio_value,:realized_pnl, :decimal], #   May be nil!
+						[:account, :string] 
+
+
+				class PortfolioValue
+
+
+				#	def to_human
+				#	"<PortfolioValue: #{contract.to_human} #{portfolio_value}>"
+				#	end
+					
+					def portfolio_value
+						unless @portfolio_value.present?
+							@portfolio_value =  IB::PortfolioValue.new   @data[:portfolio_value] 
+							@portfolio_value.contract = contract
+						end
+						@portfolio_value # return_value
+					end
+
+					def account_name
+						@account_name =  @data[:account]
+					end
+					def to_human
+						"<Message: #{portfolio_value.to_human }>"
+					end
+				end # PortfolioValue
+
+
+
+			PositionData =
+				def_message( [61,3] , ContractMessage,
+					[:account, :string],
+          [:contract, :contract], # read standard-contract 
+#																	 [ con_id, symbol,. sec_type, expiry, strike, right, multiplier,
+																	 # primary_exchange, currency, local_symbol, trading_class ] 
+          [:position, :decimal],   # changed from int after Server Vers. MIN_SERVER_VER_FRACTIONAL_POSITIONS
+					[:price, :decimal]
+									 ) do 
+#        def to_human
+          "<PositionValue: #{account} ->  #{contract.to_human} ( Amount #{position}) : Market-Price #{price} >"
         end
 
-        def to_human
-          "<PortfolioValue: #{contract.to_human} (#{position}): Market #{market_price}" +
-              " price #{market_value} value; PnL: #{unrealized_pnl} unrealized," +
-              " #{realized_pnl} realized; account #{account_name}>"
-        end
-      end # PortfolioValue
+			PositionDataEnd = def_message( 62 )
+			PositionsMulti =  def_message( 71, ContractMessage,
+																		[ :request_id, :int ], 
+																		[ :account, :string ],
+																		[:contract, :contract], # read standard-contract 
+          [ :position, :decimal],   # changed from int after Server Vers. MIN_SERVER_VER_FRACTIONAL_POSITIONS
+					[ :average_cost, :decimal],
+					[ :model_code, :string ])
+
+			PositionsMultiEnd =  def_message 72
+	
+					
+					AccountUpdatesMulti =  def_message( 73,
+							[ :request_id, :int ],
+							[ :account , :string ],
+							[ :key		,  :string ],
+							[ :value ,	 :decimal],
+							[ :currency, :string ])
+
+					AccountUpdatesMultiEnd =  def_message 74
+
 
 
     end # module Incoming

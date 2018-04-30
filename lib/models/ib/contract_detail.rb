@@ -18,6 +18,13 @@ module IB
       :long_name, #         Descriptive name of the asset.
       :contract_month, #    The contract month of the underlying futures contract.
 
+			:agg_group,
+			:under_symbol,
+			:under_sec_type,
+			:market_rule_ids,
+			:real_expiration_date,
+
+
       # For Bonds only
       :valid_next_option_date,
       :valid_next_option_type,
@@ -43,8 +50,10 @@ module IB
       #          to change by 1. It cannot be used to get market value by multiplying
       #          the price by the approximate multiplier.
 
-      :sec_id_list, # Hash with multiple Security ids
-
+      :sec_id_list, # Array with multiple Security ids
+      # MD Size Multiplier. Returns the size multiplier for values returned to tickSize from a market data request. Generally 100 for US stocks and 1 for other instruments.
+      :md_size_multiplier,
+#
       # BOND values:
       :cusip, # The nine-character bond CUSIP or the 12-character SEDOL.
       :ratings, # Credit rating of the issuer. Higher rating is less risky investment.
@@ -84,6 +93,16 @@ module IB
         :convertible => false,
         :next_option_partial => false
     end
+
+		def to_human
+			ret = "<ContractDetails  #{long_name}, market-name:#{market_name}, "
+			ret << "category:#{category}, industry:#{industry} / #{subcategory}, " if category.present?
+			ret << "underlying: con_id:#{under_con_id} , sec_type:#{under_sec_type}, symbol:#{under_symbol} " unless under_con_id.zero?
+      ret << "ev_multiplier:#{ev_multiplier}, convertible:#{convertible}, cupon:#{coupon}, "
+			ret << "md_size_multiplier:#{md_size_multiplier}, min_tick:#{min_tick}, next_option_partial:#{next_option_partial} "
+			ret <<"price_magnifier:#{price_magnifier}, puttable:#{puttable}, sec_id-list:#{sec_id_list}, "
+			ret <<"valid exchanges: #{ valid_exchanges}, order types: #{order_types} >"
+		end
 
   end # class ContractDetail
 end # module IB

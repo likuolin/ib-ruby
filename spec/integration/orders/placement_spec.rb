@@ -1,122 +1,124 @@
 require 'order_helper'
 
-describe 'Orders', :connected => true, :integration => true do
-  let(:contract_type) { :stock }
+describe 'Order placement'  do # :connected => true, :integration => true do
+	let(:contract_type) { :stock }
 
-  before(:all) { verify_account }
+	before(:all) { verify_account;  IB::Connection.new OPTS[:connection].merge(:logger => mock_logger)  }
 
-  context 'Placing wrong order', :slow => true do
+	after(:all) do 
+		remove_open_orders
+		close_connection 
+	end
 
-    before(:all) do
-      @ib = IB::Connection.new OPTS[:connection].merge(:logger => mock_logger)
-      @ib.wait_for :NextValidId
+	context 'Placing wrong order', :slow => true do
 
-      place_order IB::Symbols::Stocks[:wfc],
-                  :limit_price => 9.131313 # Weird non-acceptable price
-      @ib.wait_for 1 # sec
-    end
+		before(:all) do
+			ib = IB::Connection.current
+			ib.wait_for :NextValidId
+			@initial_local_id = ib.next_local_id
+			ib.clear_received   # just in case ...
+			place_the_order do | price |
+				IB::Limit.order action: :buy, size: 100, account: ACCOUNT,
+				:limit_price =>  price*2.001 #  non-acceptable price
+			end
+		end
 
-    after(:all) { close_connection }
+		context IB::Connection do 
 
-    it 'does not place new Order' do
-      @ib.received[:OpenOrder].should be_empty
-      @ib.received[:OrderStatus].should be_empty
-    end
+			subject { IB::Connection.current }
 
-    it 'still changes client`s next_local_id' do
-      @local_id_placed.should == @local_id_before
-      @ib.next_local_id.should == @local_id_before + 1
-    end
+			it 'does not place new Order' do
+				expect( subject.received[:OpenOrder] ).to be_empty
+				expect( subject.received[:OrderStatus] ).to be_empty
+			end
 
-    context 'received :Alert message' do
-      subject { @ib.received[:Alert].last }
+			it 'still changes client`s next_local_id' do
+				expect( subject.current.next_local_id ).to eq @initial_local_id +1
+			end
 
-      it { should be_an IB::Messages::Incoming::Alert }
-      it { should be_error }
-      its(:code) { should be_a Integer }
-      its(:message) { should =~ /The price does not conform to the minimum price variation for this contract/ }
-    end
+			it_has_message "Alert message" ,  /The price does not conform to the minimum price variation for this contract/ 
 
-  end # Placing wrong order
 
-  context 'What-if order' do
-    before(:all) do
-      @ib = IB::Connection.new OPTS[:connection].merge(:logger => mock_logger)
-      @ib.wait_for :NextValidId
+		end #  context IB::Connection
 
-      place_order IB::Symbols::Stocks[:wfc],
-                  :limit_price => 9.13, # Set acceptable price
-                  :what_if => true # Hypothetical
-      @ib.wait_for 1
-    end
+	end # Placing wrong order
 
-    after(:all) { close_connection }
+	context 'What-if order' do
+		before(:all) do
+			ib = IB::Connection.current
 
-    it 'changes client`s next_local_id' do
-      @local_id_placed.should == @local_id_before
-      @ib.next_local_id.should == @local_id_before + 1
-    end
+			@initial_local_id = ib.next_local_id
+			@local_id = place_the_order  do  | market_price |
+				IB::Limit.order action: :buy, size: 100,  
+				:limit_price => market_price - 1, # Set acceptable price
+				:what_if => true, # Hypothetical
+				account: ACCOUNT
+			end
+		end
 
-    it { @ib.received[:OpenOrder].should have_at_least(1).open_order_message }
-    it { @ib.received[:OrderStatus].should have_exactly(0).status_messages }
+		it 'changes client`s next_local_id' do
+			expect( IB::Connection.current.next_local_id ).to eq @initial_local_id +1
+		end
 
-    it 'responds with margin and commission info' do
-      order_should_be /PreSubmitted/
-      order = @ib.received[:OpenOrder].first.order
-      order.what_if.should == true
-      order.equity_with_loan.should be_a Float
-      order.init_margin.should be_a Float
-      order.maint_margin.should be_a Float
-      order.commission.should be_a Float
-      order.equity_with_loan.should be > 0
-      order.init_margin.should be > 0
-      order.maint_margin.should be > 0
-      order.commission.should be > 1
-    end
+		it { expect( IB::Connection.current.received[:OpenOrder]).to  have_at_least(1).open_order_message }
+		it { expect( IB::Connection.current.received[:OrderStatus]).to have_exactly(0).status_messages }
+		context IB::Order do
+			subject { IB::Connection.current.received[:OpenOrder].last.order }
+			it_behaves_like 'Placed Order'
+			it_behaves_like 'Presubmitted what-if Order'
+		end
 
-    it 'is not actually being placed though' do
-      @ib.clear_received
-      @ib.send_message :RequestOpenOrders
-      @ib.wait_for :OpenOrderEnd
-      @ib.received[:OpenOrder].should have_exactly(0).order_message
-    end
-  end
+		context "finalize" do
+			it 'is not actually being placed though' do
+				ib = IB::Connection.current
+				ib.clear_received
+				ib.send_message :RequestOpenOrders
+				ib.wait_for :OpenOrderEnd
+				expect( ib.received[:OpenOrder] ).to have_exactly(0).order_message
+			end
+		end
+	end
 
-  context 'Off-market limit' do
-    before(:all) do
-      @ib = IB::Connection.new OPTS[:connection].merge(:logger => mock_logger)
-      @ib.wait_for :NextValidId
-      place_order IB::Symbols::Stocks[:wfc], :limit_price => 9.13 # Acceptable price
-      @ib.wait_for [:OpenOrder, 3], [:OrderStatus, 2], 6
-    end
+	context 'Off-market limit' do
+		before(:all) do
+			ib = IB::Connection.current
+			@initial_local_id = ib.next_local_id
+			place_the_order  do | market_price |
+				IB::Limit.order   action: :buy, size: 100, :limit_price => market_price-1, # Acceptable price
+				account: ACCOUNT
+			end
+		end
 
-    after(:all) { close_connection }
+		context IB::Order do
+			subject { IB::Connection.current.received[:OpenOrder].last.order }
+			it_behaves_like 'Placed Order'
+		end
 
-    it_behaves_like 'Placed Order'
+		context "Cancelling wrong order" do
+			before(:all) do
+				ib = IB::Connection.current
+				ib.clear_received
+				@initial_local_id = ib.next_local_id
+				ib.cancel_order rand(99999999)
 
-    context "Cancelling wrong order" do
-      before(:all) do
-        @ib.cancel_order rand(99999999)
+				ib.wait_for :Alert
+			end
 
-        @ib.wait_for :Alert
-      end
+			it { puts IB::Connection.current.received[:Alert].to_human }
+			it { expect( IB::Connection.current.received[:Alert]).to have_at_least(1).alert_message }
 
-      it { @ib.received[:Alert].should have_exactly(1).alert_message }
+			it 'does not increase client`s next_local_id further' do
+				expect( IB::Connection.current.next_local_id ).to eq @initial_local_id 
+			end
 
-      it 'does not increase client`s next_local_id further' do
-        @ib.next_local_id.should == @local_id_after
-      end
+			it 'does not receive Order messages' do
+				ib = IB::Connection.current
+				puts  ib.received[:OrderStatus].to_human
+				expect( ib.received?(:OrderStatus)).to be_falsy
+				expect( ib.received?(:OpenOrder)).to be_falsy
+			end
+			it_has_message "Alert message" , /OrderId \d* that needs to be cancelled is not found/
 
-      it 'does not receive Order messages' do
-        @ib.received?(:OrderStatus).should be_false
-        @ib.received?(:OpenOrder).should be_false
-      end
-
-      it 'receives unable to find Order Alert' do
-        alert = @ib.received[:Alert].first
-        alert.should be_an IB::Messages::Incoming::Alert
-        alert.message.should =~ /Can't find order with id =/
-      end
-    end # Cancelling
-  end # Off-market limit
+		end
+	end # Off-market limit
 end # Orders

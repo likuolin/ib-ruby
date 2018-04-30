@@ -1,11 +1,17 @@
 require 'integration_helper'
 
-describe "Request Contract Info", :connected => true, :integration => true do
+RSpec.shared_examples_for 'valid ContractData Request' do
+			its( :request_id ){ is_expected.to eq @request_id  }
+			its( :contract ){ is_expected.to be_valid.and be ==  contract   }
+			its( :buffer ){ is_expected.to be_empty } # all transmitted data are recognized
+
+end
+describe "Request Contract Info" do 
 
   before(:all) do
     verify_account
-    @ib = IB::Connection.new OPTS[:connection].merge(:logger => mock_logger)
-    @ib.wait_for :NextValidId
+    ib = IB::Connection.new OPTS[:connection].merge(:logger => mock_logger)
+    ib.wait_for :NextValidId
   end
 
   after(:all) { close_connection }
@@ -13,240 +19,258 @@ describe "Request Contract Info", :connected => true, :integration => true do
   context "Request Stock data" do
 
     before(:all) do
-      @contract = IB::Contract.new :symbol => 'AAPL', :sec_type => :stock
-      @ib.send_message :RequestContractData, :id => 111, :contract => @contract
-      @ib.wait_for :ContractDataEnd, 3 # sec
-      # java: 15:33:16:159 <- 9-6-111-0-AAPL-STK--0.0---     ---0-- -
-      # ruby: 15:36:15:736 <- 9-6-111-0-AAPL-STK--0.0---SMART--- --0-
+			ib =  IB::Connection.current
+      @request_id =  ib.send_message :RequestContractData, :contract => IB::Symbols::Stocks.aapl
+      ib.wait_for :ContractDataEnd, 3 # sec
     end
+	
 
     after(:all) { clean_connection } # Clear logs and message collector
+  
+		let( :contract  ) { IB::Symbols::Stocks.aapl }
 
-    it { @ib.received[:ContractData].should have_exactly(2).contract_data }
-    it { @ib.received[:ContractDataEnd].should have_exactly(1).contract_data_end }
 
-    it 'receives Contract Data for requested contract' do
-      msg = @ib.received[:ContractData].first
-      msg.request_id.should == 111
-      msg.contract.should == @contract
-      msg.contract.should be_valid
-    end
+		context IB::Connection do
+			subject { IB::Connection.current  }
+		  it { expect( subject.received[:ContractData] ).to have_exactly(1).contract_data }
+			it { expect( subject.received[:ContractDataEnd] ).to have_exactly(1).contract_data_end }
+		end
+
+		context IB::Messages::Incoming::ContractData do
+			subject { IB::Connection.current.received[:ContractData].first }	
+
+			it_behaves_like 'valid ContractData Request'
 
     it 'receives Contract Data with extended fields' do
-      # Returns 2 contracts, one for NASDAQ and one for IBIS - internal crossing?
 
-      @ib.received[:ContractData].each do |msg|
-        contract = msg.contract
-        detail = msg.contract_detail
+			contract = subject.contract
+			detail = subject.contract_detail
 
-        contract.symbol.should == 'AAPL'
-        contract.local_symbol.should =~ /AAPL|APC/
-        contract.con_id.should be_an Integer
-        contract.expiry.should == ''
-        contract.exchange.should == 'SMART'
+      expect( contract.symbol).to  eq contract.symbol
+      expect( contract.local_symbol).to  match contract.symbol
+      expect( contract.con_id).to  be_an Integer
+      expect( contract.expiry).to be_empty.or be_nil 
+      expect( contract.exchange).to  eq 'SMART'
 
-        detail.market_name.should =~ /NMS|USSTARS/
-        detail.trading_class.should =~ /NMS|USSTARS/
-        detail.long_name.should == 'APPLE INC'
-        detail.industry.should == 'Technology'
-        detail.category.should == 'Computers'
-        detail.subcategory.should == 'Computers'
-        detail.trading_hours.should =~ /\d{8}:\d{4}-\d{4}/
-        detail.liquid_hours.should =~ /\d{8}:\d{4}-\d{4}/
-        detail.valid_exchanges.should =~ /ISLAND|IBIS/
-        detail.order_types.should be_a String
-        detail.price_magnifier.should == 1
-        detail.min_tick.should be <= 0.01
+      expect( detail.market_name).to  match /NMS|USSTARS/
+      expect( contract.trading_class).to  match /NMS|USSTARS/
+      expect( detail.long_name).to  eq 'APPLE INC'
+      expect( detail.industry).to  eq 'Technology'
+      expect( detail.category).to  eq 'Computers'
+      expect( detail.subcategory).to  eq 'Computers'
+      expect( detail.trading_hours).to  match /\d{8}:\d{4}-\d{4}/
+      expect( detail.liquid_hours).to  match /\d{8}:\d{4}-\d{4}/
+      expect( detail.valid_exchanges).to  match /SMART|EBS/
+      expect( detail.order_types).to  be_a String
+      expect( detail.price_magnifier).to  eq 1
+      expect( detail.min_tick).to  eq 0.01
       end
-    end
-  end # Stock
-
+		end
+	end
+#
   context "Request Option contract data" do
-
+#
     before(:all) do
-      @contract = IB::Option.new :symbol => "AAPL", :expiry => "201301",
-                                 :right => :call, :strike => 500
-      @ib.send_message :RequestContractData, :id => 123, :contract => @contract
-      @ib.wait_for :ContractDataEnd, 5 # sec
+			ib =  IB::Connection.current
+      @request_id =  ib.send_message :RequestContractData, :contract => IB::Symbols::Options.ge20
+      ib.wait_for :ContractDataEnd, 3 # sec
     end
-
     after(:all) { clean_connection } # Clear logs and message collector
+		let( :contract  ) { IB::Symbols::Options.ge20 }
 
-    subject { @ib.received[:ContractData].first }
+		context IB::Messages::Incoming::ContractData do
+			subject { IB::Connection.current.received[:ContractData].first }	
 
-    it { @ib.received[:ContractData].should have_exactly(1).contract_data }
-    it { @ib.received[:ContractDataEnd].should have_exactly(1).contract_data_end }
-
-    it 'receives Contract Data for requested contract' do
-      subject.request_id.should == 123
-      subject.contract.should == @contract
-      subject.contract.should be_valid
-    end
+			it_behaves_like 'valid ContractData Request'
 
     it 'receives Contract Data with extended fields' do
       contract = subject.contract
       detail = subject.contract_detail
 
-      contract.symbol.should == 'AAPL'
-      contract.local_symbol.should == 'AAPL  130119C00500000'
-      contract.expiry.should == '20130118'
-      contract.exchange.should == 'SMART'
-      contract.con_id.should be_an Integer
+      expect( contract.symbol).to  eq 'GE'
+      expect( contract.local_symbol).to  match  /^GE[ ]{4}[0-9]{6}C[0-9]{8}$/
+      expect( contract.last_trading_day).to  match /^\d{4}-\d{2}-\d{2}$/
+      expect( contract.exchange).to  eq 'SMART'
+      expect( contract.con_id).to  be_an Integer
 
-      detail.market_name.should == 'AAPL'
-      detail.trading_class.should == 'AAPL'
-      detail.long_name.should == 'APPLE INC'
-      detail.industry.should == 'Technology'
-      detail.category.should == 'Computers'
-      detail.subcategory.should == 'Computers'
-      detail.trading_hours.should =~ /\d{8}:\d{4}-\d{4}/
-      detail.liquid_hours.should =~ /\d{8}:\d{4}-\d{4}/
-      detail.valid_exchanges.should =~ /CBOE/
-      detail.order_types.should be_a String
-      detail.price_magnifier.should == 1
-      detail.min_tick.should == 0.01
+      expect( detail.market_name).to  eq 'GE'
+      expect( contract.trading_class).to  eq 'GE'
+      expect( detail.long_name).to  eq 'GENERAL ELECTRIC CO'
+      expect( detail.industry).to  eq 'Industrial'
+      expect( detail.category).to  eq 'Miscellaneous Manufactur'
+      expect( detail.subcategory).to  eq 'Diversified Manufact Op'
+      expect( detail.trading_hours).to  match /\d{8}:\d{4}-\d{4}/
+      expect( detail.liquid_hours).to  match /\d{8}:\d{4}-\d{4}/
+      expect( detail.valid_exchanges).to  match /CBOE/
+      expect( detail.order_types).to  be_a String
+      expect( detail.price_magnifier).to  eq 1
+      expect( detail.min_tick).to  eq 0.01
     end
-  end # Request Option data
+		end
+	end
+	context "Request OptionChain  by expiry"  do
+    before(:all) do
+			ib =  IB::Connection.current
+			ib.clear_received :ContractData
+      @request_id =  ib.send_message :RequestContractData, :contract => IB::Symbols::Options.ibm_lazy_expiry
+      ib.wait_for :ContractDataEnd, 3 # sec
+		end
 
-  context "Request Forex contract data" do
+		it "has recieved multible contracts" do
+			ib =  IB::Connection.current
+			
+			expect( ib.received[:ContractData]  ).to have_at_least(2).records
+		end
+	end
+
+	context "Request OptionChain  by strike"  do
+    before(:all) do
+			ib =  IB::Connection.current
+			ib.clear_received :ContractData
+      @request_id =  ib.send_message :RequestContractData, :contract => IB::Symbols::Options.ibm_lazy_strike
+      ib.wait_for :ContractDataEnd, 3 # sec
+		end
+
+		it "has recieved multible contracts" do
+			ib =  IB::Connection.current
+			
+			expect( ib.received[:ContractData]  ).to have_at_least(2).records
+		end
+
+#		context IB::Messages::Incoming::ContractData do
+#			subject { IB::Connection.current.received[:ContractData].first }	
+
+
+	end
+  context "Request Forex contract data"   do
 
     before(:all) do
-      @contract = IB::Contract.new :symbol => 'EUR', # EURUSD pair
-                                   :currency => "USD",
-                                   :exchange => "IDEALPRO",
-                                   :sec_type => :forex
-      @ib.send_message :RequestContractData, :id => 135, :contract => @contract
-      @ib.wait_for :ContractDataEnd, 3 # sec
+			ib =  IB::Connection.current
+			ib.clear_received :ContractData
+      @request_id = ib.send_message :RequestContractData, :contract =>  IB::Symbols::Forex.eurusd
+      ib.wait_for :ContractDataEnd, 3 # sec
     end
 
     after(:all) { clean_connection } # Clear logs and message collector
+		let( :contract  ) { IB::Symbols::Forex.eurusd }
 
-    subject { @ib.received[:ContractData].first }
+		context IB::Messages::Incoming::ContractData do
+			subject { IB::Connection.current.received[:ContractData].first }	
 
-    it { @ib.received[:ContractData].should have_exactly(1).contract_data }
-    it { @ib.received[:ContractDataEnd].should have_exactly(1).contract_data_end }
-
-    it 'receives Contract Data for requested contract' do
-      subject.request_id.should == 135
-      subject.contract.should == @contract
-      subject.contract.should be_valid
-    end
-
+			it_behaves_like 'valid ContractData Request'
+    
     it 'receives Contract Data with extended fields' do
       contract = subject.contract
       detail = subject.contract_detail
 
-      contract.symbol.should == 'EUR'
-      contract.local_symbol.should == 'EUR.USD'
-      contract.expiry.should == ''
-      contract.exchange.should == 'IDEALPRO'
-      contract.con_id.should be_an Integer
+      expect( contract.symbol).to  eq 'EUR'
+      expect( contract.local_symbol).to  eq 'EUR.USD'
+      expect( contract.expiry).to be_empty.or be_nil 
+      expect( contract.exchange).to  eq 'IDEALPRO'
+      expect( contract.con_id).to  be_an Integer
 
-      detail.market_name.should == 'EUR.USD'
-      detail.trading_class.should == 'EUR.USD'
-      detail.long_name.should =~ /European Monetary Union [Ee]uro/
-      detail.industry.should == ''
-      detail.category.should == ''
-      detail.subcategory.should == ''
-      detail.trading_hours.should =~ /\d{8}:\d{4}-\d{4}/
-      detail.liquid_hours.should =~ /\d{8}:\d{4}-\d{4}/
-      detail.valid_exchanges.should =~ /IDEALPRO/
-      detail.order_types.should be_a String
-      detail.price_magnifier.should == 1
-      detail.min_tick.should be <= 0.0001
+      expect( detail.market_name).to  eq 'EUR.USD'
+      expect( contract.trading_class).to  eq 'EUR.USD'
+      expect( detail.long_name).to  match /European Monetary Union [Ee]uro/
+      expect( detail.industry).to  eq ''
+      expect( detail.category).to  eq ''
+      expect( detail.subcategory).to  eq ''
+      expect( detail.trading_hours).to  match /\d{8}:\d{4}-\d{4}/
+      expect( detail.liquid_hours).to  match /\d{8}:\d{4}-\d{4}/
+      expect( detail.valid_exchanges).to match /IDEALPRO/
+      expect( detail.order_types).to  be_a String
+      expect( detail.price_magnifier).to  eq 1
+      expect( detail.min_tick).to  be <= 0.0001
     end
-  end # Request Forex data
+		end
+	end 
 
-  context "Request Futures contract data" do
+
+
+  context "Request Futures contract data"  do
 
     before(:all) do
-      @contract = IB::Symbols::Futures[:ym] # Mini Dow Jones Industrial
-      @ib.send_message :RequestContractData, :id => 147, :contract => @contract
-      @ib.wait_for :ContractDataEnd, 3 # sec
+			ib =  IB::Connection.current
+      @request_id = ib.send_message :RequestContractData, :contract => IB::Symbols::Futures.ym # Mini Dow Jones Industrial IB::Symbols::Forex.eurusd
+      ib.wait_for :ContractDataEnd, 3 # sec
     end
 
     after(:all) { clean_connection } # Clear logs and message collector
+		let( :contract  ) { IB::Symbols::Futures.ym }
+		context IB::Messages::Incoming::ContractData do
+			subject { IB::Connection.current.received[:ContractData].first }	
 
-    subject { @ib.received[:ContractData].first }
+			it_behaves_like 'valid ContractData Request'
 
-    it { @ib.received[:ContractData].should have_exactly(1).contract_data }
-    it { @ib.received[:ContractDataEnd].should have_exactly(1).contract_data_end }
+			it 'receives Contract Data with extended fields' do
+				contract = subject.contract
+				detail = subject.contract_detail
 
-    it 'receives Contract Data for requested contract' do
-      subject.request_id.should == 147
-      subject.contract.should == @contract
-      subject.contract.should be_valid
-    end
+				expect( contract.symbol).to  eq 'YM'
+				expect( contract.local_symbol).to  match /YM/
+				expect( contract.expiry).to  match Regexp.new(IB::Symbols::Futures.next_expiry)
+				expect( contract.exchange).to  eq 'ECBOT'
+				expect( contract.con_id).to  be_an Integer
 
-    it 'receives Contract Data with extended fields' do
-      contract = subject.contract
-      detail = subject.contract_detail
-
-      contract.symbol.should == 'YM'
-      contract.local_symbol.should =~ /YM/
-      contract.expiry.should =~ Regexp.new(IB::Symbols::Futures.next_expiry)
-      contract.exchange.should == 'ECBOT'
-      contract.con_id.should be_an Integer
-
-      detail.market_name.should == 'YM'
-      detail.trading_class.should == 'YM'
-      detail.long_name.should == 'Mini Sized Dow Jones Industrial Average $5'
-      detail.industry.should == ''
-      detail.category.should == ''
-      detail.subcategory.should == ''
-      detail.trading_hours.should =~ /\d{8}:\d{4}-\d{4}/
-      detail.liquid_hours.should =~ /\d{8}:\d{4}-\d{4}/
-      detail.valid_exchanges.should =~ /ECBOT/
-      detail.order_types.should be_a String
-      detail.price_magnifier.should == 1
-      detail.min_tick.should == 1
-    end
-  end # Request Forex data
-
-  context "Request Bond data" do
-
-    before(:all) do
-      @contract = IB::Symbols::Bonds[:wag] # Wallgreens bonds (multiple)
-      @ib.send_message :RequestContractData, :id => 158, :contract => @contract
-      @ib.wait_for :ContractDataEnd, 5 # sec
-    end
-
-    after(:all) { clean_connection } # Clear logs and message collector
-
-    subject { @ib.received[:BondContractData].first }
-
-    it { @ib.received[:BondContractData].should have_at_least(1).contract_data }
-    it { @ib.received[:ContractDataEnd].should have_exactly(1).contract_data_end }
-
-    it 'receives Contract Data for requested contract' do
-      subject.request_id.should == 158
-      # subject.contract.should == @contract # symbol is blanc in returned Bond contracts
-      subject.contract.should be_valid
-    end
-
-    it 'receives Contract Data with extended fields' do
-      contract = subject.contract
-      detail = subject.contract_detail
-
-      contract.sec_type.should == :bond
-      contract.symbol.should == ''
-      contract.con_id.should be_an Integer
-
-      detail.cusip.should be_a String
-      detail.desc_append.should =~ /WAG/ # "WAG 4 7/8 08/01/13" or similar
-      detail.trading_class.should =~ /IBCID/ # "IBCID113527163"
-      detail.sec_id_list.should be_a Hash
-      detail.sec_id_list.should have_key "CUSIP"
-      detail.sec_id_list.should have_key "ISIN"
-      detail.valid_exchanges.should be_a String
-      detail.order_types.should be_a String
-      detail.min_tick.should == 0.001
-    end
-  end # Request Forex data
-end # Contract Data
-
+				expect( detail.market_name).to  eq 'YM'
+				expect( contract.trading_class).to  eq 'YM'
+				expect( detail.long_name).to  eq 'Mini Sized Dow Jones Industrial Average $5'
+				expect( detail.industry).to  eq ''
+				expect( detail.category).to  eq ''
+				expect( detail.subcategory).to  eq ''
+				expect( detail.trading_hours).to  match /\d{8}:\d{4}-\d{4}/
+				expect( detail.liquid_hours).to  match /\d{8}:\d{4}-\d{4}/
+				expect( detail.valid_exchanges).to  match /ECBOT/
+				expect( detail.order_types).to  be_a String
+				expect( detail.price_magnifier).to  eq 1
+				expect( detail.min_tick).to  eq 1
+			end
+		end
+	end
+end 
+    
+#
+#  context "Request Bond data",  pending: true do
+#
+#    before(:all) do
+#      @contract = IB::Symbols::Bonds[:wag] # Wallgreens bonds (multiple)
+#      @ib.send_message :RequestContractData, :id => 158, :contract => @contract
+#      @ib.wait_for :ContractDataEnd, 5 # sec
+#    end
+#
+#    after(:all) { clean_connection } # Clear logs and message collector
+#
+#    subject { @ib.received[:BondContractData].first }
+#
+#    it { @ib.received[:BondContractData].should have_at_least(1).contract_data }
+#    it { @ib.received[:ContractDataEnd].should have_exactly(1).contract_data_end }
+#
+#    it 'receives Contract Data for requested contract' do
+#      subject.request_id.should == 158
+#      # subject.contract.should == @contract # symbol is blanc in returned Bond contracts
+#      subject.contract.should be_valid
+#    end
+#
+#    it 'receives Contract Data with extended fields' do
+#      contract = subject.contract
+#      detail = subject.contract_detail
+#
+#      contract.sec_type.should == :bond
+#      contract.symbol.should == ''
+#      contract.con_id.should be_an Integer
+#
+#      detail.cusip.should be_a String
+#      detail.desc_append.should =~ /WAG/ # "WAG 4 7/8 08/01/13" or similar
+#      detail.trading_class.should =~ /IBCID/ # "IBCID113527163"
+#      detail.sec_id_list.should be_a Hash
+#      detail.sec_id_list.should have_key "CUSIP"
+#      detail.sec_id_list.should have_key "ISIN"
+#      detail.valid_exchanges.should be_a String
+#      detail.order_types.should be_a String
+#      detail.min_tick.should == 0.001
+#    end
+#  end # Request Forex data
+#end # Contract Data
+#
 
 __END__
-ContractData messages v.6 and 8 identical:
-10-8-500-GOOG-OPT-20130118-500-C-SMART-USD-GOOG  130119C00500000-GOOG-GOOG-81032967-0.05-100-ACTIVETIM,ADJUST,ALERT,ALGO,ALLOC,AON,AVGCOST,BASKET,COND,CONDORDER,DAY,DEACT,DEACTDIS,DEACTEOD,FOK,GAT,GTC,GTD,GTT,HID,ICE,IOC,LIT,LMT,MIT,MKT,MTL,NONALGO,OCA,PAON,POSTONLY,RELSTK,SCALE,SCALERST,SMARTSTG,STP,STPLMT,TRAIL,TRAILLIT,TRAILLMT,TRAILMIT,VOLAT,WHATIF,-SMART,AMEX,BATS,BOX,CBOE,CBOE2,IBSX,ISE,MIBSX,NASDAQOM,PHLX,PSE-1-30351181-GOOGLE INC-CL A--201301-Communications-Internet-Web Portals/ISP-EST-20120428:CLOSED;20120430:0930-1600-20120428:CLOSED;20120430:0930-1600-
-10-6-500-GOOG-OPT-20130118-500-C-SMART-USD-GOOG  130119C00500000-GOOG-GOOG-81032967-0.01-100-ACTIVETIM,ADJUST,ALERT,ALGO,ALLOC,AON,AVGCOST,BASKET,COND,CONDORDER,DAY,DEACT,DEACTDIS,DEACTEOD,FOK,GAT,GTC,GTD,GTT,HID,ICE,IOC,LIT,LMT,MIT,MKT,MTL,NONALGO,OCA,PAON,POSTONLY,RELSTK,SCALE,SCALERST,SMARTSTG,STP,STPLMT,TRAIL,TRAILLIT,TRAILLMT,TRAILMIT,VOLAT,WHATIF,-SMART,AMEX,BATS,BOX,CBOE,CBOE2,IBSX,ISE,MIBSX,NASDAQOM,PHLX,PSE-1-30351181-GOOGLE INC-CL A--201301-Communications-Internet-Web Portals/ISP-EST-20120428:CLOSED;20120430:0930-1600-20120428:CLOSED;20120430:0930-1600-
