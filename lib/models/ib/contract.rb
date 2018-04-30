@@ -27,12 +27,14 @@ module IB
       :symbol => :s, # This is the symbol of the underlying asset.
 
       :local_symbol => :s, # Local exchange symbol of the underlying asset
-
+      :trading_class => :s,
       # Future/option contract multiplier (only needed when multiple possibilities exist)
       :multiplier => {:set => :i},
 
       :strike => :f, # double: The strike price.
       :expiry => :s, # The expiration date. Use the format YYYYMM or YYYYMMDD
+      :last_trading_day =>  :s, # the tws returns the last trading day in Format YYYYMMMDD hh:mm
+				# which may differ from the expiry 
       :exchange => :sup, # The order destination, such as Smart.
       :primary_exchange => :sup, # Non-SMART exchange where the contract trades.
       :include_expired => :bool, # When true, contract details requests and historical
@@ -67,6 +69,7 @@ module IB
     ### Associations
 
     has_many :orders # Placed for this Contract
+		has_many :portfolio_values
 
     has_many :bars # Possibly representing trading history for this Contract
 
@@ -113,35 +116,51 @@ module IB
         :exchange => 'SMART',
         :include_expired => false
     end
-
-    # This returns an Array of data from the given contract.
-    # Different messages serialize contracts differently. Go figure.
-    # Note that it does NOT include the combo legs.
-    # serialize [:option, :con_id, :include_expired, :sec_id]
+=begin
+    This returns an Array of data from the given contract and is used to represent
+    contracts in outgoing messages.
+    
+    Different messages serialize contracts differently. Go figure.
+    
+    Note that it does NOT include the combo legs.
+    serialize :option, :con_id, :include_expired, :sec_id
+    
+    18/1/18: serialise always includes conid
+=end
     def serialize *fields
-      [(fields.include?(:con_id) ? [con_id] : []),
-       symbol,
-       self[:sec_type],
-       (fields.include?(:option) ?
-        [expiry,
-         strike,
-         self[:right],
-         multiplier] : []),
-       exchange,
-       (fields.include?(:primary_exchange) ? [primary_exchange] : []),
-       currency,
-       local_symbol,
-       (fields.include?(:sec_id) ? [sec_id_type, sec_id] : []),
-       (fields.include?(:include_expired) ? [include_expired] : []),
-       ].flatten
+      print_default = ->(field, default="") { field.blank? ? default : field }
+      print_not_zero = ->(field, default="") { field.to_i.zero? ? default : field }
+      [(con_id.present? && con_id.to_i > 0 ? con_id : ""),
+       print_default[symbol],
+       print_default[self[:sec_type]],
+       ( fields.include?(:option) ?
+       [ print_default[expiry], 
+				 print_not_zero[strike], 
+				 print_default[self[:right]], 
+				 print_default[multiplier]] : nil ),
+       print_default[exchange],
+       ( fields.include?(:primary_exchange) ? print_default[primary_exchange]   : nil ) ,
+       print_default[currency],
+       print_default[local_symbol],
+       ( fields.include?(:trading_class) ? print_default[trading_class] : nil ),
+       ( fields.include?(:include_expired) ? print_default[include_expired,0] : nil ),
+       ( fields.include?(:sec_id_type) ? [print_default[sec_id_type], print_default[sec_id]] : nil )
+       ].flatten.compact
     end
 
+    # serialize contract 
+    # con_id. sec_type, expiry, strike, right, multiplier exchange, primary_exchange, currency, local_symbol, include_expired 
+    # other fields on demand
     def serialize_long *fields
-      serialize :option, :primary_exchange, *fields
+      serialize :option, :include_expired, :primary_exchange, :trading_class, *fields
     end
 
+    # serialize contract 
+    # con_id. sec_type, expiry, strike, right, multiplier exchange, currency, local_symbol
+    # other fields on demand
+    # acutal used by place_order, request_marketdata, request_market_depth, exercise_options
     def serialize_short *fields
-      serialize :option, *fields
+      serialize :option, :trading_class, *fields
     end
 
     # Serialize under_comp parameters: EClientSocket.java, line 471
@@ -153,7 +172,7 @@ module IB
     def serialize_legs *fields
       case
       when !bag?
-        []
+       [] 
       when legs.empty?
         [0]
       else
@@ -176,6 +195,15 @@ module IB
     def serialize_ib_ruby
       serialize_long.join(":")
     end
+
+		def to_yaml
+		 build 	symbol: symbol, con_id: con_id,  right: self.right,
+							  exchange: exchange, sec_type: self.sec_type,  currency: currency,
+								expiry: expiry,  strike: strike,   local_symbol: local_symbol,
+								multiplier: multiplier,  primary_exchange: primary_exchange 
+
+
+		end
 
     # Contract comparison
     def == other
@@ -221,7 +249,7 @@ module IB
     def to_s
       "<Contract: " + instance_variables.map do |key|
         value = send(key[1..-1])
-        " #{key}=#{value}" unless value.nil? || value == '' || value == 0
+        " #{key}=#{value} (#{value.class}) " unless value.blank? 
       end.compact.join(',') + " >"
     end
 
@@ -238,9 +266,14 @@ module IB
     end
 
     def to_short
-      "#{symbol}#{expiry}#{strike}#{right}#{exchange}#{currency}"
+      if expiry.blank? && last_trading_day.blank? 
+      "#{symbol}# {exchange}# {currency}"
+      elsif expiry.present?
+      "#{symbol}(#{strike}) #{right} #{expiry} /#{exchange}/#{currency}"
+			else
+      "#{symbol}(#{strike}) #{right} #{last_trading_day} /#{exchange}/#{currency}"
+      end
     end
-
     # Testing for type of contract:
 
     def bag?
@@ -259,6 +292,32 @@ module IB
       self[:sec_type] == 'OPT'
     end
 
+=begin
+From the release notes of TWS 9.50
+
+Within TWS and Mosaic, we use the last trading day and not the actual expiration date for futures, options and futures options contracts. To be more accurate, all fields and selectors throughout TWS that were labeled Expiry or Expiration have been changed to Last Trading Day. Note that the last trading day and the expiration date may be the same or different dates.
+
+In many places, such as the OptionTrader, Probability Lab and other options/futures tools, this is a simple case of changing the name of a field to Last Trading Day. In other cases the change is wider-reaching. For example, basket files that include derivatives were previously saved using the Expiry header. When you try to import these legacy .csv files, you will now receive a message requiring that you change this column title to LastTradingDayorContractMonth before the import will be accepted. New basket files that include derivatives will use this correct header. Additionally, this new field serves two functions. If you use the format YYYYMMDD, we understand you are identifying the last trading day for a contract. If you use the format YYYYMM, we understand you are identifying the contract month.
+
+In places where these terms are used to indicate a concept, we have left them as Expiry or Expiration. For example in the Option Chain settings where we allow you to "Load the nearest N expiries" we have left the word expiries. Additionally, the Contract Description window will show both the Last Trading Date and the Expiration Date. Also in cases where it's appropriate, we have replaced Expiry or Expiration with Contract Month.
+
+
+IB-ruby uses expiry to query Contracts.
+
+The response from the TWS is stored in 'last_trading_day' (Contract) and 'real_expiration_data' (ContractDetails)
+
+However, after querying a contract, 'expiry' ist overwritten by 'last_trading_day'. The original 'expiry'
+is still available through 'attributes[:expiry]'
+
+=end
+		def expiry
+			if self.last_trading_day.present?
+				last_trading_day.gsub(/-/,'')
+			else
+				@attributes[:expiry]
+			end
+		end
+
   end # class Contract
 
 
@@ -266,6 +325,9 @@ module IB
 
   require 'models/ib/option'
   require 'models/ib/bag'
+  require 'models/ib/forex'
+  require 'models/ib/future'
+  require 'models/ib/stock'
 
   class Contract
     # Contract subclasses representing specialized security types.
@@ -273,6 +335,10 @@ module IB
     Subclasses = Hash.new(Contract)
     Subclasses[:bag] = IB::Bag
     Subclasses[:option] = IB::Option
+    Subclasses[:future] = IB::Future
+    Subclasses[:stock] = IB::Stock
+    Subclasses[:forex] = IB::Forex
+
 
     # This builds an appropriate Contract subclass based on its type
     def self.build opts = {}
@@ -281,8 +347,8 @@ module IB
     end
 
     # This returns a Contract initialized from the serialize_ib_ruby format string.
-    def self.from_ib_ruby string
-      keys = [:symbol, :sec_type, :expiry, :strike, :right, :multiplier,
+    def self.from_ib_ruby 
+      keys = [:con_id, :symbol, :sec_type, :expiry, :strike, :right, :multiplier,
               :exchange, :primary_exchange, :currency, :local_symbol]
       props = Hash[keys.zip(string.split(":"))]
       props.delete_if { |k, v| v.nil? || v.empty? }
@@ -290,3 +356,14 @@ module IB
     end
   end # class Contract
 end # module IB
+
+class String
+	def to_contract
+      keys = [:con_id, :symbol, :sec_type, :expiry, :strike, :right, :multiplier,
+              :exchange, :primary_exchange, :currency, :local_symbol]
+      props = Hash[keys.zip(split(":"))]
+      props.delete_if { |k, v| v.nil? || v.empty? }
+      IB::Contract.build props
+
+	end
+end

@@ -6,7 +6,7 @@ module IB
     extend ActiveModel::Callbacks
     include ActiveModel::Validations
     include ActiveModel::Serialization
-    include ActiveModel::Serializers::Xml
+    #include ActiveModel::Serializers::Xml
     include ActiveModel::Serializers::JSON
 
     define_model_callbacks :initialize
@@ -24,7 +24,7 @@ module IB
     # ActiveModel API (for serialization)
 
     def attributes
-      @attributes ||= HashWithIndifferentAccess.new
+      @attributes ||= Hash.new #HashWithIndifferentAccess.new
     end
 
     def attributes= attrs
@@ -34,6 +34,10 @@ module IB
     # ActiveModel-style read/write_attribute accessors
     def [] key
       attributes[key.to_sym]
+    end
+
+    def update_attribute key, value
+      @attributes[key.to_sym] = value
     end
 
     def []= key, val

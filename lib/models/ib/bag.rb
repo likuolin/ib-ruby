@@ -48,5 +48,8 @@ module IB
       super && same_legs?(other)
     end
 
+		def verify
+			0 # no verification
+		end
   end # class Bag
 end # IB

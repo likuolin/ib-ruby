@@ -111,12 +111,12 @@ module IB
                       [:tick_type, :int],
                       #                       What is the "not yet computed" indicator:
                       [:implied_volatility, :decimal_limit_1], # -1 and below
-                      [:delta, :decimal_limit_2], #              -2 and below
-                      [:option_price, :decimal_limit_1], #       -1   -"-
-                      [:pv_dividend, :decimal_limit_1], #        -1   -"-
-                      [:gamma, :decimal_limit_2], #              -2   -"-
-                      [:vega, :decimal_limit_2], #               -2   -"-
-                      [:theta, :decimal_limit_2], #              -2   -"-
+                      [:delta, :decimal_limit_2],					#      -2 and below
+                      [:option_price, :decimal_limit_1],	#      -1   -"-
+                      [:pv_dividend, :decimal_limit_1],		#      -1   -"-
+                      [:gamma, :decimal_limit_2],					#      -2   -"-
+                      [:vega, :decimal_limit_2],					#      -2   -"-
+                      [:theta, :decimal_limit_2],					#      -2   -"-
                       [:under_price, :decimal_limit_1]) do
 
             "<TickOption #{type} for #{:ticker_id}: underlying @ #{under_price}, "+
