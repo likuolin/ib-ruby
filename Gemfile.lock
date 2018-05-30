@@ -9,6 +9,7 @@ PATH
   specs:
     ib-ruby (0.9.7.2)
       bundler (>= 1.1.16)
+      ox
 
 GEM
   remote: https://rubygems.org/
