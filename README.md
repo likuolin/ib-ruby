@@ -1,29 +1,12 @@
-# ib-ruby
+# IB-Ruby
 
-Ruby Implementation of the Interactive Brokers Trader Workstation (TWS) API v.9.72+.
+Ruby Implementation of the Interactive Brokers Trader Workstation (TWS) API.
 
-Copyright (C) 2006-2018 Paul Legato, Wes Devauld, Ar Vicco and Hartmut Bischoff.
-
-https://github.com/ib-ruby/ib-ruby
-
-__WARNING:__ This software is provided __AS-IS__ with __NO WARRANTY__, express or
-implied. Your use of this software is at your own risk. It may contain any number
-of bugs, known or unknown, which might cause you to lose money if you use it.
-You've been warned.
-
-This code is not sanctioned or supported by Interactive Brokers.
-
-## API v.9.72+ & Inclusion of Gateway-Application
-The master-branch covers the most recent versions of Ruby and TWS. Ruby 2.4 and TWS Vers. 969 
-are needed. It provides active-model objects which behave as thread-safe and lightweight acitve-record's. 
-
-The IB::Connection-Application stores any response from the TWS in a _received_-Array. Its not intended for 24/7-applications 
-but ideal for quick-queries. The [IB::Gateway-Application]( https://github.com/ib-ruby/ib-ruby/wiki/Gateway) provides a ready-to-go solution for reliable automated claims. 
-
+![Screenshot](ib-ruby.png)
 ## SUMMARY:
 
 This is a pure Ruby implementation of Interactive Brokers API. It uses socket API directly. 
-So it does not have any dependencies other than TWS/Gateway itself.
+So it does not have any dependencies other than TWS/Gateway itself. API Version 973.04  is supported. 
 
 Why Ruby? Many people are put off by the amount of boilerplate code/plumbing required
 by Python, Java, ActiveX or C++ API to do even the simplest of things, like getting account
@@ -45,33 +28,45 @@ create a mechanical trading system with complex order processing logics, that
 contains 1/10th of code and is 500% more maintaineable than it is possible with
 other API implementations. The choice is yours.
 
+## API v.9.72+ & Inclusion of Gateway-Application
+The master-branch covers the most recent versions of Ruby and TWS. Ruby 2.4 and TWS Vers. 969 
+are needed. It provides active-model objects which behave as thread-safe and lightweight acitve-record's. 
+
+`IB-Ruby Core`(IB::Connection) serializes any response from the TWS into a `received`-Array. Its not intended for 24/7-applications but ideal for quick-queries. [IB::Gateway]( https://github.com/ib-ruby/ib-ruby/wiki/Gateway) provides a ready-to-go solution for reliable automated claims. 
+
+## Simple Monitor Demo Application
+__`IB-Ruby`__ integrates easily into common Web-Frameworks. This is demonstrated in the [Simple-Monitor](https://github.com/ib-ruby/simple-monitor) Application. It displays current portfolio positions and some account-measures in any browser. 
+
+
 ## INSTALLATION:
-
-### From RubyGems
-
-    $ sudo gem install ib-ruby [-v version]
-
-### From Source
 
     $ git clone https://github.com/ib-ruby/ib-ruby
     $ cd ib-ruby
     $ bundle install; bundle update
-
+    
+    or
+    
+    specify in Gemfile:
+    
+    gem ib-ruby,  :git=> 'git://github.com/ib-ruby/ib-ruby.git'
+    
+ Detailed documentation: [wiki](https://github.com/ib-ruby/ib-ruby/wiki/Setup-Ruby-and-Install-the-Program) 
+ 
 ## PREREQUISITES:
 
 0. A Ruby Interpreter, at least Version 2.4. We recommend Version 2.5 or above.
 
 1. Install Interactive Brokers connectivity software: either
-   [TWS](http://www.interactivebrokers.com/en/p.php?f=tws) or
-   [Gateway](http://www.interactivebrokers.com/en/p.php?f=programInterface&ib_entity=llc)
+   [TWS](https://www.interactivebrokers.com/en/index.php?f=14099#tws-software) or
+   [Gateway](https://www.interactivebrokers.com/en/index.php?f=16454)
 
 2. Configure the software to allow API connections from the computer you plan to run
-   ib-ruby on, which is typically localhost (127.0.0.1) if you're running ib-ruby on
+   `IB-Ruby` on, which is typically localhost (127.0.0.1) if you're running ib-ruby on
    the same machine as TWS/Gateway. [Here](http://www.youtube.com/watch?v=53tmypRq5wI)
    you can see how this is done for TWS.
 
-3. Make sure sure your ib-ruby gem version is compatible with your software version.
-   As a rule of thumb, most recent ib-ruby gem only supports latest versions of
+3. Make sure sure your `IB-Ruby` gem version is compatible with your software version.
+   As a rule of thumb, most recent `IB-Ruby` gem only supports latest versions of
    TWS/Gateway API. Older versions of API are supported by previous gem versions:
 
     | ib-ruby gem | TWS version | API version  |
@@ -83,19 +78,19 @@ other API implementations. The choice is yours.
 4. Start Interactive Broker's Trader Work Station or Gateway before your code
    attempts to connect to it. Note that TWS and Gateway listen to different ports,
    this library assumes connection to Gateway on the same machine (localhost:4002)
-   by default, this can be changed via :host and :port options given to IB::Connection.new.
+   by default, this can be changed via :host and :port options given to `IB::Connection.new` or `IB::Gateway.new`.
 
 ## SYNOPSIS:
-To play around, a console-app is included. Change to the bin-directory and call 
+To play around, a [Console-App]( https://github.com/ib-ruby/ib-ruby/wiki/Console) is included. Change to the bin-directory and run 
 
 ```  
   ./console.rb  ("t" if a tws(GUI) is running on localhost)
 ```
 
-After startup, IB-Ruby is running, the Connection ist active and accessible via the global Constant »C».
-Any message to the TWS, any subscription to incomming messages can be initialized. (Details in [Wiki(Console)](https://github.com/ib-ruby/ib-ruby/wiki/Console))
+After startup, `IB-Ruby` is running, the Connection ist active and accessible via the global Constant »`C`».
+Any outgoing message to send, any subscription to incomming messages can be initialized. (Details in [Wiki(Console)](https://github.com/ib-ruby/ib-ruby/wiki/Console))
 
-By default, any response from the TWS is stored in the Received-Hash.
+By default, any response from TWS is stored in the `Connection.received`-Hash.
 It is easily inspected in the [Console](https://github.com/ib-ruby/ib-ruby/wiki/Console)
 
 ``` ruby
@@ -131,45 +126,16 @@ lines of code - and without sacrificing code readability or flexibility.
 
     contract = IB::Stock.new symbol: 'WFC'
                                    
-    buy_order = IB::Limit.order total_quantity: 100, limit_price: 21.00,
-                                action: :buy, tif: :good_till_cancelled, account_code: 'U123456'
+    buy_order = IB::Limit.order size: 100, price: 21.00, action: :buy, 
+                                tif: :good_till_cancelled, account_code: 'U123456'
    
     ib.place_order buy_order, contract
     ib.wait_for :ExecutionData
 ```
-Your code interacts with TWS via exchange of messages. Messages that you send to
-TWS are called 'Outgoing', messages your code receives from TWS - 'Incoming'.
+_([wiki -> place the order](https://github.com/ib-ruby/ib-ruby/wiki/place_the_order) contains a solution that fetches the market price
+of the asset and proposes this as base for the setting of the order-price.)_
 
-First, you need to subscribe to incoming message types you're interested in
-using `Connection#subscribe`. This can be done anywhere. Permanent subscriptions
-can be entered before the connection itself is established. This is realized 
-through the block when instantiating the Object. The code block (or proc) given to `#subscribe`
-will be executed when an incoming message of the this type is received from the TWS,
-with the received message as its argument.
 
-Then, you request specific data from TWS using `Connection#send_message` or place
-your order using `Connection#place_order`. TWS will respond with messages that you
-should have subscribed for, and these messages will be processed in a code block
-given to `#subscribe`.
-
-In order to give TWS time to respond, you either run a message processing loop or
-just wait until Connection receives the messages type you requested.
-
-See `lib/ib/messages` for a full list of supported incoming/outgoing messages
-and their attributes. The original TWS docs and code samples can also be found
-in `misc` directory.
-
-Sample scripts in `example` directory demonstrate common ib-ruby use cases. Examples
-show you how to access account info, print real time quotes, retrieve historic or
-fundamental data, request options calculations, place, list, and cancel orders.
-You may also want to look into `spec/integration` directory for more scenarios,
-use cases and examples of handling IB messages.
-
-## RUNNING TESTS:
-
-The gem comes with a spec suit that may be used to test ib-ruby compatibility with your
-specific TWS/Gateway installation. Please read 'spec/Readme.md' for more details about
-running specs.
 
 ## CONTRIBUTING:
 
@@ -186,6 +152,19 @@ If you want to contribute to ib-ruby development:
 9. Go to your Github fork and create new Pull Request via Github GUI
 
 ... then proceed from step 5 for more code modifications...
+
+<hr>
+Copyright (C) 2006-2018 Paul Legato, Wes Devauld, Ar Vicco and Hartmut Bischoff.
+
+https://github.com/ib-ruby/ib-ruby
+
+__WARNING:__ This software is provided __AS-IS__ with __NO WARRANTY__, express or
+implied. Your use of this software is at your own risk. It may contain any number
+of bugs, known or unknown, which might cause you to lose money if you use it.
+You've been warned.
+
+This code is not sanctioned or supported by Interactive Brokers.
+
 
 ## LICENSE:
 

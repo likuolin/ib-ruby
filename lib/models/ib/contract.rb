@@ -67,7 +67,7 @@ module IB
     attr_accessor :description # NB: local to ib, not part of TWS.
 
     ### Associations
-
+		has_many :misc   # multi purpose association
     has_many :orders # Placed for this Contract
 		has_many :portfolio_values
 
@@ -207,7 +207,9 @@ module IB
 
     # Contract comparison
     def == other
+			return false if !other.is_a?(Contract)
       return true if super(other)
+			return true if con_id.to_i != 0 && con_id == other.con_id
 
       return false unless other.is_a?(self.class)
 

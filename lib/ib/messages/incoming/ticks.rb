@@ -15,6 +15,10 @@ module IB
                 " #{key} #{value}" unless [:version, :ticker_id, :tick_type].include?(key)
               end.compact.join(',') + " >"
         end
+
+				def the_data
+					@data.reject{|k,_| [:version, :ticker_id].include? k }
+				end
       end
 
       # The IB code seems to dispatch up to two wrapped objects for this message, a tickPrice
@@ -119,7 +123,7 @@ module IB
                       [:theta, :decimal_limit_2],					#      -2   -"-
                       [:under_price, :decimal_limit_1]) do
 
-            "<TickOption #{type} for #{:ticker_id}: underlying @ #{under_price}, "+
+            "<TickOption #{type} for #{ticker_id}: underlying @ #{under_price}, "+
                 "option @ #{option_price}, IV #{implied_volatility}%, delta #{delta}, " +
                 "gamma #{gamma}, vega #{vega}, theta #{theta}, pv_dividend #{pv_dividend}>"
           end

@@ -71,7 +71,9 @@ module IB
 			if key.empty? 
 				if contracts.has_key?(method)
 					contracts[method]
-				else
+					elsif methods.include?(:each) && each.methods.include?(method)
+							self.each.send method  				
+					else
 					error "contract #{method} not defined. Try »all« for a list of defined Contracts.", :symbol
 				end
 			else
@@ -80,7 +82,7 @@ module IB
 		end
 
 		def all
-			contracts.keys.sort
+			contracts.keys.sort rescue contracts.keys
 		end
 		def print_all
 			puts contracts.sort.map{|x,y| [x,y.description].join(" -> ")}.join "\n"
