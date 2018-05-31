@@ -35,6 +35,7 @@ module IB
     # UNKNOWN = 3
      :price  # support for pet leg prices
 
+    #LIKUO EDIT
     alias_method :conid, :con_id
 
     # Extra validations

@@ -53,7 +53,7 @@ module IB
       :sec_id_list, # Array with multiple Security ids
       # MD Size Multiplier. Returns the size multiplier for values returned to tickSize from a market data request. Generally 100 for US stocks and 1 for other instruments.
       :md_size_multiplier,
-#
+      #
       # BOND values:
       :cusip, # The nine-character bond CUSIP or the 12-character SEDOL.
       :ratings, # Credit rating of the issuer. Higher rating is less risky investment.
@@ -74,6 +74,7 @@ module IB
       :next_option_partial => :bool # # only if bond has embedded options.
 
       # Extra validations
+      #LIKUO EDIT
       #validates_format_of :time_zone, :with => /\A\w{3}\z/, :message => 'should be XXX'
 
     serialize :sec_id_list, HashWithIndifferentAccess
