@@ -37,7 +37,10 @@ module IB
                     [:contract_detail, :liquid_hours, :string],
                     [:contract_detail, :ev_rule, :decimal],
                     [:contract_detail, :ev_multipler, :string],
-										[:contract_detail, :sec_id_list,:hash],
+                    #LIKUO EDIT
+                    
+                                        [:contract_detail, :sec_id_list,:array],
+										#[:contract_detail, :sec_id_list,:hash],
 										[:contract_detail, :agg_group, :int ],
 										[:contract_detail, :under_symbol, :string ],
 										[:contract_detail, :under_sec_type, :string ],
