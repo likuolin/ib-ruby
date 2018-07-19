@@ -72,9 +72,20 @@ module IBSupport
 			end
 		end
 
+
+		#LIKUOLIN edit
 		def read_date
 			the_string = read_string
-			the_string.blank? ? nil : Date.parse(the_string)
+			if the_string.blank?
+				return nil
+			else 
+				puts the_string
+				begin
+					return Date.parse(the_string)
+				rescue ArgumentError
+					return nil
+				end
+			end
 		end
 		#    def read_array
 		#      count = read_int
