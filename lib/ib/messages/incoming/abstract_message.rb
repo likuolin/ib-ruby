@@ -79,12 +79,8 @@ module IBSupport
 			if the_string.blank?
 				return nil
 			else 
-				puts the_string
-				begin
-					return Date.parse(the_string)
-				rescue ArgumentError
-					return nil
-				end
+				puts the_string				
+					return Date.parse(the_string)				
 			end
 		end
 		#    def read_array
