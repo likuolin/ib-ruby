@@ -14,30 +14,16 @@ module IB
       :wap, #    Weighted average price during the time covered by the bar.
       :trades, # int: When TRADES data history is returned, represents number
       #           of trades that occurred during the time period the bar covers
-      :time, # TODO: convert into Time object?
+      :time #DateTime
       #        The date-time stamp of the start of the bar. The format is
       #        determined by the reqHistoricalData() formatDate parameter.
-      :has_gaps => :bool # Whether or not there are gaps in the data.
+#      :has_gaps => :bool # Whether or not there are gaps in the data.  ## omitted since ServerVersion 124
 
       validates_numericality_of :open, :high, :low, :close, :volume
 
-    # Order comparison
-    def == other
-      super(other) ||
-        other.is_a?(self.class) &&
-        time == other.time &&
-        open == other.open &&
-        high == other.high &&
-        low == other.low &&
-        close == other.close &&
-        wap == other.wap &&
-        trades == other.trades &&
-        volume == other.volume
-    end
-
-    def to_human
+   def to_human
       "<Bar: #{time} wap #{wap} OHLC #{open} #{high} #{low} #{close} " +
-        (trades ? "trades #{trades}" : "") + " vol #{volume} gaps #{has_gaps}>"
+        (trades ? "trades #{trades}" : "") + " vol #{volume}>"
     end
 
     alias to_s to_human

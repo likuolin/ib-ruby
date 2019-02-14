@@ -5,23 +5,25 @@ module IB
       # Data format is { :id => int: local_id,
       #                  :contract => Contract,
       #                  :order => Order }
-      PlaceOrder = def_message [3, 45]
+      PlaceOrder = def_message [3, 45]				## ServerVersion > 145:  def_message[ 0,45 ]
+																							## server-version is not known at compilation time
+																							## Method call has to be replaced then
+																							## Max-Client_ver --> 144!!
 
       class PlaceOrder
-
+				
         def encode
-
+#					server_version = Connection.current.server_version
           order = @data[:order]
           contract = @data[:contract]
-
+					error "contract has to be specified" unless contract.is_a? IB::Contract
          [super[0..-1],
 #	  [ [3,45, @data[:local_id] ],
            contract.serialize_short(:primary_exchange, :sec_id_type),
 
            # main order fields
            (order.side == :short ? 'SSHORT' : order.side == :short_exempt ? 'SSHORTX' : order.side.to_sup),
-#           order.quantity,
-	   order.total_quantity,
+					 order.total_quantity,
            order[:order_type], # Internal code, 'LMT' instead of :limit
            order.limit_price,		
            order.aux_price,
@@ -45,7 +47,7 @@ module IB
            if contract.bag?
              [
                ## Support for per-leg prices in Order
-               [contract.legs.size] + contract.legs.map { |_| nil }, #(&:price) ,
+               [contract.combo_legs.size] + contract.combo_legs.map { |_| nil }, #(&:price) ,
                ## Support for combo routing params in Order
                order.combo_params.empty? ? 0 : [order.combo_params.size] + order.combo_params.to_a
 	     ]
@@ -82,8 +84,12 @@ module IB
            order.stock_range_lower || "",
            order.stock_range_upper || "",
            order.override_percentage_constraints || false,
-           order.volatility || "", #              Volatility orders
-           order[:volatility_type] || "", #       Volatility orders
+					 if order.volatility.present?
+           [ order.volatility , #              Volatility orders
+           order[:volatility_type] || 2 ] #     default: annual volatility
+						else
+						["",""]
+					 end,
            # Support for delta neutral orders with parameters
            if order.delta_neutral_order_type && order.delta_neutral_order_type != :none
              [order[:delta_neutral_order_type],
@@ -150,7 +156,7 @@ module IB
 	    order.pegged_change_amount,
 	    order.reference_change_amount,
 	    order.reference_exchange_id ] : [] ),
-		 order.serialize_conditions ,   # this is  actual a dummy method
+		 order.serialize_conditions ,   # serialisation of conditions outsourced to model file
 	   order.adjusted_order_type ,
 	   order.trigger_price ,
 	   order.limit_price_offset ,
@@ -158,15 +164,41 @@ module IB
 	   order.adjusted_stop_limit_price ,
 	   order.adjusted_trailing_amount ,
 	   order.adjustable_trailing_unit ,
-
-
 	   order.ext_operator ,		      # MIN_SERVER_VER_EXT_OPERATOR:
 		 order.soft_dollar_tier_name,
 		 order.soft_dollar_tier_value,
 		 order.soft_dollar_tier_display_name,
 #	   order.serialize_soft_dollar_tier() ,	      # MIN_SERVER_VER_SOFT_DOLLAR_TIER
-	   order.cash_qty ]		      # MIN_SERVER_VER_CASH_QTY
-	  
+	   order.cash_qty , 		      # MIN_SERVER_VER_CASH_QTY  /111)
+#			 if server_version >= 138   # :min_server_ver_decision_maker 
+				 [ order.mifid_2_decision_maker, order.mifid_2_decision_algo],
+#				end ,
+#				if server_version >= 139 # min_server_ver_mifid_execution  
+				[ order.mifid_2_execution_maker, order.mifid_2_execution_algo ],
+#				end,
+#				if server_version >= 141 # min_server_ver_auto_price_for_hedge 
+				order.dont_use_auto_price_for_hedge,
+#				end,
+#				if server_version >= 145 #	min_server_ver_order_container
+					order.is_O_ms_container,
+#				end,
+#				if server_version >= 148 # 	min_server_ver_d_peg_orders
+					order.discretionary_up_to_limit_price
+#				end ]
+				]
+#
+#
+#
+#	   if self.serverVersion() >= MIN_SERVER_VER_AUTO_PRICE_FOR_HEDGE:141
+#            flds.append(make_field(order.dontUseAutoPriceForHedge))
+#
+#        if self.serverVersion() >= MIN_SERVER_VER_ORDER_CONTAINER:145
+#            flds.append(make_field(order.isOmsContainer))
+#
+#        if self.serverVersion() >= MIN_SERVER_VER_D_PEG_ORDERS: 148
+#            flds.append(make_field(order.discretionaryUpToLimitPrice))
+#
+#  
 
         end
       end # PlaceOrder

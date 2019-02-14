@@ -21,13 +21,17 @@ module IB
       super.merge :sec_type => :bag #,:legs => Array.new,
     end
 
-    def description
-      self[:description] || to_human
-    end
+#    def description
+#      self[:description] || to_human
+#    end
 
     def to_human
       "<Bag: #{[symbol, exchange, currency].join(' ')} legs: #{legs_description} >"
     end
+
+		def con_id= arg
+			# dont' update con_id
+		end
 
     ### Leg-related methods
 
@@ -35,12 +39,12 @@ module IB
     # TODO: Find a way to serialize legs without references...
     # IB-equivalent leg description.
     def legs_description
-      self[:legs_description] || legs.map { |leg| "#{leg.con_id}|#{leg.weight}" }.join(',')
+      self[:legs_description] || combo_legs.map { |the_leg| "#{the_leg.con_id}|#{the_leg.weight}" }.join(',')
     end
 
     # Check if two Contracts have same legs (maybe in different order)
     def same_legs? other
-      legs == other.legs ||
+      combo_legs == other.combo_legs ||
         legs_description.split(',').sort == other.legs_description.split(',').sort
     end
 
@@ -49,8 +53,5 @@ module IB
       super && same_legs?(other)
     end
 
-		def verify
-			0 # no verification
-		end
   end # class Bag
 end # IB

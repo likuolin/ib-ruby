@@ -9,23 +9,32 @@ PATH
   specs:
     ib-ruby (0.9.7.2)
       activemodel
+<<<<<<< HEAD
       activesupport
+=======
+      activesupport (>= 5.2)
+>>>>>>> f9f6f35f856f191f74201da743e8cda973204a68
       bundler (>= 1.1.16)
       ox
 
 GEM
   remote: https://rubygems.org/
   specs:
+<<<<<<< HEAD
     activemodel (5.2.0)
       activesupport (= 5.2.0)
     activesupport (5.2.0)
+=======
+    activemodel (5.2.2)
+      activesupport (= 5.2.2)
+    activesupport (5.2.2)
+>>>>>>> f9f6f35f856f191f74201da743e8cda973204a68
       concurrent-ruby (~> 1.0, >= 1.0.2)
       i18n (>= 0.7, < 2)
       minitest (~> 5.1)
       tzinfo (~> 1.1)
     coderay (1.1.2)
-    concurrent-ruby (1.0.5)
-    concurrent-ruby (1.0.5-java)
+    concurrent-ruby (1.1.4)
     diff-lcs (1.3)
     ffi (1.9.23)
     ffi (1.9.23-java)
@@ -45,7 +54,11 @@ GEM
       guard (~> 2.1)
       guard-compat (~> 1.1)
       rspec (>= 2.99.0, < 4.0)
+<<<<<<< HEAD
     i18n (1.0.1)
+=======
+    i18n (1.2.0)
+>>>>>>> f9f6f35f856f191f74201da743e8cda973204a68
       concurrent-ruby (~> 1.0)
     listen (3.1.5)
       rb-fsevent (~> 0.9, >= 0.9.4)
@@ -92,7 +105,6 @@ GEM
       ffi
     thor (0.20.0)
     thread_safe (0.3.6)
-    thread_safe (0.3.6-java)
     tzinfo (1.2.5)
       thread_safe (~> 0.1)
 

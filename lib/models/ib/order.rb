@@ -237,8 +237,10 @@ module IB
 			# decimal : The native cash quantity
 			:mifid_2_decision_maker,
 		  :mifid_2_decision_algo,
-		  :mifid_2_execution_trader,
-			:mifid_2_execution_algo
+		  :mifid_2_execution_maker,
+			:mifid_2_execution_algo,
+			:dont_use_auto_price_for_hedge,
+			:discretionary_up_to_limit_price
 
     # Properties with complex processing logics
     prop :tif, #  String: Time in Force (time to market): DAY/GAT/GTD/GTC/IOC
@@ -264,7 +266,8 @@ module IB
       :opt_out_smart_routing => :bool, # Australian exchange only, default false
       :open_close => PROPS[:open_close], # Originally String: O=Open, C=Close ()
       # for ComboLeg compatibility: SAME = 0; OPEN = 1; CLOSE = 2; UNKNOWN = 3;
-      [:side, :action] => PROPS[:side] # String: Action/side: BUY/SELL/SSHORT/SSHORTX
+      [:side, :action] => PROPS[:side], # String: Action/side: BUY/SELL/SSHORT/SSHORTX
+			:is_O_ms_container => :bool
 
     prop :placed_at,
       :modified_at,
@@ -285,12 +288,12 @@ module IB
     alias smart_combo_routing_params combo_params
 
 		# serialize is included for active_record compatibility
-    serialize :leg_prices
-    serialize :conditions
-    serialize :algo_params, HashWithIndifferentAccess
+  #  serialize :leg_prices
+  #  serialize :conditions
+  #  serialize :algo_params, Hash
    # serialize :combo_params
  #   serialize :soft_dollar_tier_params, HashWithIndifferentAccess
-    serialize :mics_options, HashWithIndifferentAccess
+    serialize :mics_options, Hash
 
     # Order is always placed for a contract. Here, we explicitly set this link.
     belongs_to :contract
@@ -347,7 +350,7 @@ module IB
 
     # Order is not valid without correct :local_id
     validates_numericality_of :local_id, :perm_id, :client_id, :parent_id,
-      :quantity, :min_quantity, :display_size,
+      :total_quantity, :min_quantity, :display_size,
       :only_integer => true, :allow_nil => true
 
     validates_numericality_of :limit_price, :aux_price, :allow_nil => true
@@ -390,7 +393,7 @@ module IB
 			:trigger_method => :default,
       :what_if => false,  # order.java # 493
       :leg_prices => [],
-      :algo_params => HashWithIndifferentAccess.new, #{},
+      :algo_params => Hash.new, #{},
       :combo_params =>[], #{},
   #      :soft_dollar_tier_params => HashWithIndifferentAccess.new( 
 	#				    :name => "",
@@ -404,15 +407,19 @@ module IB
       )  # closing of merge
         end
 
-def add_condition 
-end
 
-=begin
-todo
-Include conditions here
+=begin rdoc
+Format of serialisation
+
+	count of records
+	for each condition: conditiontype, condition-fields
 =end
 		def serialize_conditions
+			if conditions.empty?
 			0
+			else
+			[ conditions.count ]	+ conditions.map( &:serialize )+  [ conditions_ignore_rth, conditions_cancel_order]
+			end
 		end
 
     def serialize_algo
@@ -439,19 +446,26 @@ Include conditions here
       ""		  # Vers. 70  
     end
     # Placement
-    def place contract, connection
+		#
+		# The Order is only placed, if local_id is not set
+		#
+		# Modifies the Order-Object and returns the assigned local_id
+    def place the_contract=nil, connection=nil
+			connection ||= IB::Connection.current
       error "Unable to place order, next_local_id not known" unless connection.next_local_id
-			error "local_id present. Order is already placed" unless  local_id.nil?
+			error "local_id present. Order is already placed.  Do you  want to modify?"  unless  local_id.nil?
       self.client_id = connection.client_id
       self.local_id = connection.next_local_id
       connection.next_local_id += 1
       self.placed_at = Time.now
-      modify contract, connection, self.placed_at
+      modify the_contract, connection, self.placed_at
     end
 
     # Modify Order (convenience wrapper for send_message :PlaceOrder). Returns local_id.
-    def modify contract, connection, time=Time.now
+    def modify the_contract=nil, connection=nil, time=Time.now
 			error "Unable to modify order; local_id not specified" if local_id.nil?
+			self.contract =  the_contract unless the_contract.nil?
+			connection ||= IB::Connection.current
       self.modified_at = time
       connection.send_message :PlaceOrder,
         :order => self,
@@ -471,7 +485,7 @@ Include conditions here
          tif == other.tif &&
          action == other.action &&
          order_type == other.order_type &&
-         quantity == other.quantity &&
+         total_quantity == other.total_quantity &&
          limit_price == other.limit_price  &&
          aux_price == other.aux_price &&
          origin == other.origin &&
@@ -492,8 +506,8 @@ Include conditions here
     end
 
     def to_human
-      "<Order: " + ((order_ref && order_ref != '') ? "#{order_ref} " : '') +
-        "#{self[:order_type]} #{self[:tif]} #{side} #{total_quantity} " +
+      "<Order: " + (order_ref.present? ? order_ref.to_s : '') +
+        "#{self[:order_type]} #{self[:tif]} #{action} #{total_quantity} " + " @ "
         (limit_price ? "#{limit_price} " : '') + "#{status} " +
         ((aux_price && aux_price != 0) ? "/#{aux_price}" : '') +
         "##{local_id}/#{perm_id} from #{client_id}" +

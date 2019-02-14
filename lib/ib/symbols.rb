@@ -47,26 +47,23 @@
 # string that you may find useful there.
 
 module IB
-  module SymbolExtention
-    refine Array do
-      def method_missing(method, *key)
-	unless method == :to_hash || method == :to_str #|| method == :to_int
-	  return self.map{|x| x.public_send(method, *key)}
-	end
-      end
-    end
-  end 
+#  module SymbolExtention  # method_missing may not be refined
+#    refine Array do
+#      def method_missing(method, *key)
+#	unless method == :to_hash || method == :to_str #|| method == :to_int
+#	  return self.map{|x| x.public_send(method, *key)}
+#	end
+#      end
+#    end
+#  end 
 
   module Symbols
-    using SymbolExtention
+#    using SymbolExtention
 
-  #  def contracts
-  #    if @contracts.present? 
-  #        @contracts
-  #    else
-  #       @contrats= HashWithindifferentAccess.new
-  #    end
-  #  end
+
+		def hardcoded?
+			!self.methods.include? :yml_file
+		end
 		def method_missing(method, *key)
 			if key.empty? 
 				if contracts.has_key?(method)
@@ -95,8 +92,8 @@ module IB
 			end
 		end
 		def [] symbol
-			if contracts[symbol]
-				return contracts[symbol]
+			if c=contracts[symbol]
+				return c
 			else
 				# symbol probably has not been predefined, tell user about it
 				file = self.to_s.split(/::/).last.downcase

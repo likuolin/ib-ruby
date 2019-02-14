@@ -9,7 +9,7 @@ module IB
 
                       [:contract, :contract], # read standard-contract 
 											# [ con_id, symbol,. sec_type, expiry, strike, right, multiplier,
-											# 	primary_exchange, currency, local_symbol, trading_class ] 
+											# 	exchange, currency, local_symbol, trading_class ] 
 
                       [:order, :action, :string],
                       [:order, :total_quantity, :decimal],
@@ -91,6 +91,10 @@ module IB
           order.status
         end
 
+				def conditions
+					order.conditions
+				end
+
         # Object accessors
 
         def order
@@ -144,7 +148,7 @@ module IB
                    # As of client v.55, we receive in OpenOrder for Combos:
                    #    Contract.orderComboLegs Array
                    #    Order.leg_prices Array
-                   [:contract, :legs, :array, proc do |_|
+                   [:contract, :combo_legs, :array, proc do |_|
                      IB::ComboLeg.new :con_id => @buffer.read_int,
                                       :ratio => @buffer.read_int,
                                       :action => @buffer.read_string,
@@ -223,21 +227,11 @@ module IB
 		      [:order, :reference_change_amount, :decimal ],
 		      [:order, :reference_exchange_id, :string ]
 		   ],
-                   [:order, :conditions, :hash],   # needs modification 
-		   
-		    ## todo : process conditions
-		    #394             if order.conditionsSize > 0:
-		    # 395                 order.conditions = []
-		    #  396                 for idxCond in range(order.conditionsSize):
-		    #   397                     order.conditionType = decode(int, fields)
-		    #    398                     condition = order_condition.Create(order.conditionType)
-		    #     399                     condition.decode(fields)
-		    #      400                     order.conditions.append(condition)
-		    #       401 
-		    #        402                 order.conditionsIgnoreRth = decode(bool, fields)
-		    #         403                 order.conditionsCancelOrder = decode(bool, fields)
-		    #          404 
-		    #          
+		    [:order , :conditions, :array, proc {  IB::OrderCondition.make_from( @buffer ) } ],
+				[proc { !@data[:order][:conditions].blank?  },
+						[:order, :conditions_ignore_rth, :bool],
+						[:order, :conditions_cancel_order,:bool]
+					], 
 		    [:order, :adjusted_order_type, :string],
 		    [:order, :trigger_price,  :decimal],
 		    [:order, :trail_stop_price,  :decimal],	    # cpp -source: Traillimit orders 
@@ -249,19 +243,14 @@ module IB
 		    [:order, :soft_dollar_tier_value, :string_not_null],
 		    [:order, :soft_dollar_tier_display_name,  :string_not_null],
 		    [:order, :cash_qty,  :decimal],
-				[:order, :mifid_2_decision_maker, :string_not_null ],
-				[:order, :mifid_2_decision_algo, :string_not_null ],
-				[:order, :mifid_2_execution_trader, :string ],
-				[:order, :mifid_2_execution_algo, :string_not_null ]
+				[:order, :mifid_2_decision_maker, :string_not_null ],   ## correct appearance of fields below
+				[:order, :mifid_2_decision_algo, :string_not_null ],		##  is not tested yet
+				[:order, :mifid_2_execution_maker, :string ],
+				[:order, :mifid_2_execution_algo, :string_not_null ],
+				[:order, :dont_use_auto_price_for_hedge, :string ],
+				[:order, :is_O_ms_container, :bool ],
+				[ :order, :discretionary_up_to_limit_price, :decimal ]
 
-#		     if self.serverVersion() >= MIN_SERVER_VER_DECISION_MAKER:
-#            flds.append(make_field( order.mifid2DecisionMaker))
-#            flds.append(make_field( order.mifid2DecisionAlgo))
-#
-#        if self.serverVersion() >= MIN_SERVER_VER_MIFID_EXECUTION:
-#            flds.append(make_field( order.mifid2ExecutionTrader))
-#            flds.append(make_field( order.mifid2ExecutionAlgo))
-#
     
         end
 

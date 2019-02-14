@@ -21,7 +21,7 @@
   end
   def update_or_create item, *condition, &b
     member = first_or_create( item, *condition, &b) 
-    self[ index( member ) ] = item  unless member == self
+    self[ index( member ) ] = item  unless member.is_a?(Array)
     self  # always returns the array 
   end
 
@@ -95,7 +95,7 @@ If only one Account is transmitted,  User and Advisor are identical.
 (returns an empty array if the array is not initialized, eg not connected)
 =end
   def active_accounts
-      @accounts.size > 1 ? @accounts[1..-1] : @accounts[0..0] 
+     @accounts.find_all{|x| x.user? && x.connected }
   end
 	
 =begin
@@ -124,7 +124,7 @@ The Advisor is always the first account
 (returns nil if the array is not initialized, eg not connected)
 =end
   def advisor
-    @accounts.first 
+    @accounts.first
   end
 
   def initialize  port: 4002, # 7497, 
@@ -132,12 +132,13 @@ The Advisor is always the first account
 		  client_id:  random_id,
 		  subscribe_managed_accounts: true, 
 		  subscribe_alerts: true, 
-		  subscribe_account_infos: true,
 		  subscribe_order_messages: true, 
 		  connect: true, 
 		  get_account_data: false,
 		  serial_array: false, 
-		  logger: default_logger
+		  logger: default_logger,
+			watchlists: [] ,  # array of watchlists (IB::Symbols::{watchlist}) containing descriptions for complex positions
+			&b
 
     host, port = (host+':'+port.to_s).split(':') 
     
@@ -148,24 +149,24 @@ The Advisor is always the first account
 		@connection_parameter = { received: serial_array, port: port, host: host, connect: false, logger: logger, client_id: client_id }
     
 		@account_lock = Mutex.new
-    
+		@watchlists = watchlists
 		@gateway_parameter = { s_m_a: subscribe_managed_accounts, 
-			   s_a: subscribe_alerts,
-			   s_a_i: subscribe_account_infos, 
-			   s_o_m: subscribe_order_messages,
-			    g_a_d: get_account_data }
+													 s_a: subscribe_alerts,
+													 s_o_m: subscribe_order_messages,
+													 g_a_d: get_account_data }
 
+		
 		Thread.report_on_exception = true
 		# https://blog.bigbinary.com/2018/04/18/ruby-2-5-enables-thread-report_on_exception-by-default.html
     Gateway.current = self
     # establish Alert-framework
     IB::Alert.logger = logger
     # initialise Connection without connecting
-    prepare_connection
+    prepare_connection &b
     # finally connect to the tws
     if connect || get_account_data
       if connect(100)  # tries to connect for about 2h
-				get_account_data().join  if get_account_data
+				get_account_data(watchlists: watchlists.map{|b| IB::Symbols.allocate_collection b})  if get_account_data
 				#    request_open_orders() if request_open_orders || get_account_data 
       else
 				@accounts = []   # definitivley reset @accounts
@@ -174,6 +175,10 @@ The Advisor is always the first account
 
   end
 
+	def active_watchlists
+		@watchlists
+	end
+	
   def get_host
     "#{@connection_parameter[:host]}: #{@connection_parameter[:port] }"
   end
@@ -213,44 +218,29 @@ allows reconnection if a socket_error occurs
   end
 
 =begin
-The code to translate the wrappers into a message 
-is copied from connection
+Cancels one or multible orders
+
+Argument is either an order-object or a local_id
 =end
 
-  def cancel_order *local_ids
+  def cancel_order *orders 
 
-     local_ids.each do |local_id|
+    logger.tap{|l| l.progname =  'Gateway#CancelOrder' }
+	
+     orders.compact.each do |o|
+			 local_id = if o.is_a? (IB::Order)
+										logger.info{ "Cancelling #{o.to_human}" }
+										o.local_id
+									else
+										o
+									end
          send_message :CancelOrder, :local_id => local_id.to_i
      end
 
   end
 
-=begin
-ModifyOrder, PlaceOrder
-hold an exact copy of the code of connection
-instead of a connection object a gateway-instance is used to connect, which provides Gateway#SendMessage
 
-
-for interal use. To place an Order properly, use Account#ModifyOrder
-=end
-    def modify_order order, contract
-    @account_lock.synchronize do
-      order.modify contract, self  if contract.is_a?( IB::Contract )
-    end
-    end
-=begin
-Gateway#PlaceOrder
-
-for interal use. To place an Order properly, use Account#PlaceOrder
-=end
-    def place_order order, contract
-    @account_lock.synchronize do
-       order.place contract, self  if order.is_a? IB::Order
-    end
-    end
-
-
-  def prepare_connection
+  def prepare_connection &b
     tws.disconnect if tws.is_a? IB::Connection
     self.tws = IB::Connection.new  @connection_parameter do |c|
     # the accounts-array keeps any account tranmitted first after connecting 
@@ -265,14 +255,15 @@ for interal use. To place an Order properly, use Account#PlaceOrder
 
     # prepare Advisor-User hierachie
     initialize_managed_accounts if @gateway_parameter[:s_m_a]
-    initialize_alerts  if  @gateway_parameter[:s_a]
-    initialize_account_infos if @gateway_parameter[:s_a_i] || @gateway_parameter[:g_a_d]
-    initialize_order_handling if@gateway_parameter[:s_o_m] || @gateway_parameter[:g_a_d] 
+    initialize_alerts if @gateway_parameter[:s_a]
+    initialize_order_handling if @gateway_parameter[:s_o_m] || @gateway_parameter[:g_a_d] 
     ## apply other initialisations which should apper before the connection as block
     ## i.e. after connection order-state events are fired if an open-order is pending
     ## a possible response is best defined before the connect-attempt is done
+		# ##  Attention
+		# ##  @accounts are not initialized yet
     if block_given? 
-      yield self, tws
+      yield self 
     
     end
   end
@@ -340,16 +331,16 @@ Its always active.
 =end
 
   def initialize_managed_accounts
-		tws.subscribe( :ReceiveFA )  do |msg|
+		rec_id = tws.subscribe( :ReceiveFA )  do |msg|
 			unless IB.db_backed?
 				msg.accounts.each do |a|
-					for_selected_account( a.account  ){| the_account | the_account.update_attribute :alias, a.alias }
+					for_selected_account( a.account  ){| the_account | the_account.update_attribute :alias, a.alias } unless a.alias.blank?
 				end
 				logger.info { "Accounts initialized \n #{@accounts.map( &:to_human  ).join " \n " }" }
 			end
 		end
 
-		tws.subscribe( :ManagedAccounts ) do |msg| 
+		man_id = tws.subscribe( :ManagedAccounts ) do |msg| 
 			logger.progname =  'Gateway#InitializeManagedAccounts' 
 			if @accounts.empty?
 				unless IB.db_backed?
@@ -392,7 +383,7 @@ Its always active.
 				end
 
       else
-				logger.info {"already #{accounts.size} initialized "}
+				logger.info {"already #{@accounts.size} accounts initialized "}
 				@accounts.each{|x| x.update_attribute :connected ,  true }
 			end # if
 		end # subscribe do
@@ -402,6 +393,7 @@ Its always active.
 
   def initialize_alerts
 
+		tws.subscribe(  :AccountUpdateTime  ){| msg | logger.debug{ msg.to_human }}
     tws.subscribe(:Alert) do |msg| 
       logger.progname = 'Gateway#Alerts'
       logger.debug " ----------------#{msg.code}-----"
@@ -420,21 +412,49 @@ Its always active.
     connect
   end
 
-  def disconnect
-    logger.progname = 'Gateway#disconnect'
-    if tws.present?
-      tws.disconnect 
-      #	@imap_accounts.each{|account,imap| imap.stop }
-      if IB.db_backed?
-      	Account.update_all :connected => false
-      else
-#	@accounts.each{|y| y.update_attribute :connected,  false }
-	@accounts = []
-      end
-      logger.info "Connection closed"
-    end
+	def disconnect
+		logger.progname = 'Gateway#disconnect'
 
-  end
+		tws.disconnect if tws.present?
+		@accounts = [] # each{|y| y.update_attribute :connected,  false }
+		logger.info "Connection closed" 
+	end
+
+# Handy method to ensure that a connection is established and active.
+#
+# The connection is resetted on the IB-side at least once a day. Then the 
+# IB-Ruby-Connection has to be reestablished, too. 
+# 
+# check_connection reconnects if nesessary and returns false if the connection is lost. 
+# 
+# It delays the process by 6 ms (150 MBit Cable connection)
+#
+#  a =  Time.now; G.check_connection; b= Time.now ;b-a
+#   => 0.00066005
+# 
+	def check_connection
+				answer = nil; count=0
+				z= tws.subscribe( :CurrentTime ) { answer = true }
+				while (answer.nil?)
+					begin
+						tws.send_message(:RequestCurrentTime)												# 10 ms  ##
+						i=0; loop{ break if answer || i > 40; i+=1; sleep 0.0001}
+					rescue IOError, Errno::ECONNREFUSED   # connection lost
+						count = 6
+					rescue IB::Error # not connected
+						reconnect 
+						count +=1
+						sleep 1
+						retry if count <= 5
+					end
+					count +=1
+					break if count > 5
+				end
+				tws.unsubscribe z
+			count < 5  && answer #  return value
+	end
+
+private
 
   def random_id
     rand 99999

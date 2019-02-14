@@ -74,11 +74,17 @@ module IB
       :next_option_partial => :bool # # only if bond has embedded options.
 
       # Extra validations
-      #LIKUO EDIT
-      #validates_format_of :time_zone, :with => /\A\w{3}\z/, :message => 'should be XXX'
+
     #LIKUO EDIT
-    serialize :sec_id_list, Array
-    #serialize :sec_id_list, HashWithIndifferentAccess
+      #validates_format_of :time_zone, :with => /\A\w{3}\z/, :message => 'should be XXX'
+      # serialize :sec_id_list, Array
+    #LIKUO EDIT
+
+
+    validates_format_of :time_zone, :with => /\A\w{3}\z/, :message => 'should be XXX'
+
+    serialize :sec_id_list, Hash
+
 
     belongs_to :contract
     alias summary contract
@@ -90,8 +96,9 @@ module IB
         :min_tick => 0,
         :ev_multipler => 0,
         #LIKUO EDIT
-        :sec_id_list => Array.new,
-        #:sec_id_list => HashWithIndifferentAccess.new,
+          #:sec_id_list => Array.new,
+        #LIKUO EDIT
+        :sec_id_list => Hash.new,
         :callable => false,
         :puttable => false,
         :convertible => false,

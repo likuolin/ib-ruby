@@ -9,7 +9,7 @@ They identify the order by local_id and perm_id
 
 Everything is carried out in a mutex-synchonized environment
 =end
-	def update_order_dependent_object order_dependent_object
+	def update_order_dependent_object order_dependent_object  # :nodoc:
 		for_active_accounts do  | a | 
 			order = if order_dependent_object.local_id.present?
 								a.locate_order( :local_id => order_dependent_object.local_id)
@@ -20,10 +20,10 @@ Everything is carried out in a mutex-synchonized environment
 		end 
 	end
   def initialize_order_handling
-		tws.subscribe( :CommissionReport, :ExecutionData, :OrderStatus, :OpenOrder, :OpenOrderEnd ) do |msg| 
+		tws.subscribe( :CommissionReport, :ExecutionData, :OrderStatus, :OpenOrder, :OpenOrderEnd, :NextValidId ) do |msg| 
 			logger.progname = 'Gateway#order_handling'
 			case msg
-
+	
 			when IB::Messages::Incoming::CommissionReport
 				# Commission-Reports are not assigned to a order -  
 				logger.info "CommissionReport -------#{msg.exec_id} :...:C: #{msg.commission} :...:P/L: #{msg.realized_pnl}-"
@@ -39,33 +39,19 @@ Everything is carried out in a mutex-synchonized environment
 				logger.info {  "Order State not assigned-- #{msg.order_state.to_human} ----------" } if success.nil?
 
 			when IB::Messages::Incoming::OpenOrder
+				## todo --> handling of bags --> no con_id
 				for_selected_account(msg.order.account) do | this_account |
 					# first update the contracts
-					#
-					if this_account.contracts.is_a?(Array)
-						msg.contract.orders.update_or_create msg.order, :perm_id
+					# make open order equal to IB::Spreads (include negativ con_id)
+					msg.contract[:con_id] = -msg.contract.combo_legs.map{|y| y.con_id}.sum  if msg.contract.is_a? IB::Bag
+					msg.contract.orders.update_or_create msg.order, :local_id
 						this_account.contracts.first_or_create msg.contract, :con_id
-					else
-						this_account.contracts.where( con_id: msg.contract.con_id ).first_or_create do |new_contract|
-							new_contract.attributes.merge msg_contract.attributes
-						end
-					end
 					# now save the order-record
-
-					if this_account.orders.is_a?(Array)
 						msg.order.contract = msg.contract
-						this_account.orders.update_or_create msg.order, :perm_id
-
-					else
-						this_account.orders.where( perm_id: msg.order.perm_id ).first_or_create do | new_order |
-							new_order.attributes.merge msg.order.attributes
-							new_order.contract =  msg.contract
-						end
-					end
+						this_account.orders.update_or_create msg.order, :local_id
 				end
 
 				#     update_ib_order msg  ## aus support 
-				#      ActiveRecord::Base.connection.close
 			when  IB::Messages::Incoming::OpenOrderEnd
 				#             exitcondition=true
 				logger.debug { "OpenOrderEnd" }
@@ -76,34 +62,54 @@ Everything is carried out in a mutex-synchonized environment
 				success= update_order_dependent_object( msg.execution) do |o|
 					logger.progname = 'Gateway#order_handling::ExecutionData '
 					o.executions << msg.execution 
-					if  msg.execution.cumulative_quantity.to_i == o.quantity.abs
+					if  msg.execution.cumulative_quantity.to_i == o.total_quantity.abs
 						logger.info{ "#{o.account} --> #{o.contract.symbol}: Execution completed" }
 						o.order_states.first_or_create(  IB::OrderState.new( perm_id: o.perm_id, local_id: o.local_id,
+						
 																																status: 'Filled' ),  :status )
+							# update portfoliovalue
+						a = @accounts.detect{|x| x.account == o.account } #  we are in a mutex controlled environment
+						 pv =  a.portfolio_values.detect{|y| y.contract.con_id == o.contract.con_id}
+						 change =  o.action == :sell ? -o.total_quantity : o.total_quantity
+						 if pv.present?
+						 pv.update_attribute :position,  pv.position + change
+						 else
+							 a.portfolio_values << IB::PortfolioValue.new( position: change, contract: o.contract)
+						 end
 					else
-						logger.debug{ "#{o.account} --> #{o.contract.symbol}: Execution not completed (#{msg.execution.cumulative_quantity.to_i}/#{o.quantity.abs})" }
+						logger.debug{ "#{o.account} --> #{o.contract.symbol}: Execution not completed (#{msg.execution.cumulative_quantity.to_i}/#{o.total_quantity.abs})" }
 					end  # branch
 				end # block
 
-				logger.info {  "Execution-Record not assigned-- #{msg.execution.to_human} ----------" } if success.nil?
+				logger.error {  "Execution-Record not assigned-- #{msg.execution.to_human} ----------" } if success.nil?
 
 			end  # case msg.code
 		end # do
 	end # def subscribe
-=begin
-Gateway#RequestOpenOrders  aliased as UpdateOrders
 
-Resets the order-array for each account first.
-Requests all open (eg. pending)  orders from the tws 
+# Resets the order-array for each account first.
+# Requests all open (eg. pending)  orders from the tws 
+#
+# Waits until the OpenOrderEnd-Message is recieved
 
-=end
 
 	def request_open_orders
+
+		exit_condition = false
+		subscription = tws.subscribe(  :OpenOrderEnd ){ exit_condition = true }
 		for_active_accounts{| account | account.orders=[] }
 		send_message :RequestAllOpenOrders
+		Timeout::timeout(1, IB::TransmissionError,"OpenOrders not received" ) do
+			loop{  sleep 0.1; break if exit_condition  }
+		end
+		tws.unsubscribe subscription
 	end
 
 	alias update_orders request_open_orders 
+
+
+
+
 end # module
 
 
@@ -130,6 +136,17 @@ module IB
 				IB::Gateway.logger.error{"Alert 202: The deleted order was not registered: local_id #{msg.error_id}"}
 			end
 
+		end
+
+
+		def self.alert_2102
+			# Connectivity between IB and Trader Workstation has been restored - data maintained.
+			sleep 0.1  #  no need to wait too long.
+			if IB::Gateway.current.check_connection
+				IB::Gateway.logger.debug { "Alert 2102: Connection stable" }
+			else
+				IB::Gateway.current.reconnect
+			end
 		end
 		class << self
 =begin
@@ -172,8 +189,8 @@ Otherwise only the last action is not applied and the order is unchanged.
 			201,  # deleted object
 			105,  # Order being modified does not match original order
 			462,  # Cannot change to the new Time in Force:GTD
-			329   # Cannot change to the new order type:STP
-
+			329,  # Cannot change to the new order type:STP
+			10147 # OrderId 0 that needs to be cancelled is not found.
 	end  # class Alert
 
 
@@ -181,20 +198,22 @@ Otherwise only the last action is not applied and the order is unchanged.
 		def auto_adjust
 			# lambda to perform the calculation	
 			adjust_price = ->(a,b) do
-				a=BigDecimal.new(a,5) 
-				b=BigDecimal.new(b,5) 
-				o=a.divmod(b)
-				o.last.zero? ? a : a-o.last 
+				a=BigDecimal(a,5) 
+				b=BigDecimal(b,5) 
+				_,o =a.divmod(b)
+			  a-o 
 			end
-
+			error "No Contract provided to Auto adjust " unless contract.is_a? IB::Contract
+			unless contract.is_a? IB::Bag
 			# ensure that contract_details are present
-			contract.verify if  contract.contract_detail.blank?
-
-			# there are two attribute to consider: limit_price and aux_price
-			# limit_price +  aux_price may be nil or an empty string. Then ".to_f.zero?" becomes true 
-			self.limit_price= adjust_price.call(limit_price.to_f, contract.contract_detail.min_tick) unless limit_price.to_f.zero?
-			self.aux_price= adjust_price.call(aux_price.to_f, contract.contract_detail.min_tick) unless aux_price.to_f.zero?
-
+				contract.verify do |the_contract | 
+					the_details =  the_contract.contract_detail
+					# there are two attributes to consider: limit_price and aux_price
+					# limit_price +  aux_price may be nil or an empty string. Then ".to_f.zero?" becomes true 
+					self.limit_price= adjust_price.call(limit_price.to_f, the_details.min_tick) unless limit_price.to_f.zero?
+					self.aux_price= adjust_price.call(aux_price.to_f, the_details.min_tick) unless aux_price.to_f.zero?
+				end
+			end
 		end
 	end  # class Order
 end  # module

@@ -24,13 +24,13 @@ IB::Gateway calls the methods in response of subscribing to the :Alert signal by
    IB::Alert.send("alert_#{msg.code}", msg )
 
 To define a response to the code 134 ( Modify order failed)  a method like
-    module IB
-      class Alert
-	def self.alert_134 msg
-	(your code)
-	end
-      end
-    end
+		module IB
+			class Alert
+				def self.alert_134 msg
+					(your code)
+				end
+			end
+		end
 has to be written. 
 
 Important: The class is accessed asynchronically.
@@ -45,22 +45,22 @@ be closed manually with
 
     mattr_accessor :logger
 
-      def self.method_missing( method_id, msg , *args, &block )
-	if msg.is_a?  IB::Messages::Incoming::Alert
-	      logger.debug { msg.to_human }
-	else
-	      logger.error { "Argument to IB::Alert is not a IB::Messages::Incoming::Alert" }
-	      logger.error { "The object: #{msg.inspect} " }
-	end
-      rescue NoMethodError
-	unless logger.nil?
-	logger.error { "The Argument is not a valid  IB::Messages:Incoming::Alert object"}
-	logger.error { "The object: #{msg.inspect} " }
-	else
-	  puts "No Logging-Device specified"
-	  puts "The object: #{msg.inspect} "
-	end
-      end
+		def self.method_missing( method_id, msg , *args, &block )
+			if msg.is_a?  IB::Messages::Incoming::Alert
+				logger.debug { msg.to_human }
+			else
+				logger.error { "Argument to IB::Alert is not a IB::Messages::Incoming::Alert" }
+				logger.error { "The object: #{msg.inspect} " }
+			end
+		rescue NoMethodError
+			unless logger.nil?
+				logger.error { "The Argument is not a valid  IB::Messages:Incoming::Alert object"}
+				logger.error { "The object: #{msg.inspect} " }
+			else
+				puts "No Logging-Device specified"
+				puts "The object: #{msg.inspect} "
+			end
+		end
 
 
 
@@ -111,6 +111,7 @@ be closed manually with
 
       ignore_alert 200 , # is handled by IB::Contract.update_contract
 		    2100, # API client has been unsubscribed from account data
+				2105, 
 		    399 # your order will not be placed at the exchange until
 
       log_alert_in_info    1102 #Connectivity between IB and Trader Workstation has been restored
