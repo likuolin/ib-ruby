@@ -2,7 +2,7 @@ module IB
 class PortfolioValue < IB::Model
     include BaseProperties
 #	belongs_to :currency
-	belongs_to :account
+	#belongs_to :account
 	belongs_to :contract
 
 #	scope :single, ->(key) { where :schluessel => key } rescue nil
