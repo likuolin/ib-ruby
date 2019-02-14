@@ -2,7 +2,7 @@ module IB
 class PortfolioValue < IB::Model
     include BaseProperties
 #	belongs_to :currency
-	#belongs_to :account
+	belongs_to :account
 	belongs_to :contract
 
 #	scope :single, ->(key) { where :schluessel => key } rescue nil
@@ -15,6 +15,15 @@ class PortfolioValue < IB::Model
 	:realized_pnl
 
 
+    def account=(assign_account)
+      if assign_account.is_a?(String)
+        update_attribute(:account_id, 0) #TODO LIKUOLIN have to decide how to merge two account models
+      elsif assign_account.is_a?(Integer)
+        update_attribute(:account_id, assign_account)
+      end             
+
+    end
+
     # Order comparison
     def == other
       super(other) ||
@@ -26,6 +35,8 @@ class PortfolioValue < IB::Model
 	realized_pnl == other.realized_pnl &&
         contract == other.contract
     end
+
+
     def to_human
 			the_account = if account.present? 
 											if account.is_a?(String)
