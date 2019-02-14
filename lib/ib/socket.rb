@@ -1,11 +1,11 @@
 require 'socket'
 module IBSupport
-  refine  Array do
+  refine Array do
     def tws
       if blank?
-	nil.tws
+	       nil.tws
       else
-	self.flatten.map( &:tws ).join  # [ "", [] , nil].flatten -> ["", nil]
+	       self.flatten.map( &:tws ).join  # [ "", [] , nil].flatten -> ["", nil]
 					# elemets with empty array's are cut 
 					# this is the desired behavior!
       end
@@ -19,14 +19,14 @@ module IBSupport
   refine String do
     def tws
       if empty?
-	IB::EOL
+	       IB::EOL
       else
-	self[-1] == IB::EOL ? self : self+IB::EOL
+	       self[-1] == IB::EOL ? self : self+IB::EOL
       end
     end
   end
 
-  refine  Numeric do
+  refine Numeric do
     def tws
       self.to_s.tws
     end
@@ -49,7 +49,9 @@ module IBSupport
      IB::EOL
     end
   end
+  
 end
+
 module IB
   # includes methods from IBSupport 
 	# which adds a tws-method to  
@@ -68,8 +70,20 @@ module IB
 		# The optional Block introduces a user-defined pattern to pack the data.
 		#
 		# Default is "Na*"
-		def prepare_message data
-			data =  data.tws unless data.is_a?(String) && data[-1]== EOL
+
+    def convert_data(data)
+    
+      if data.respond_to?(:value) && data.value.nil?
+        nil
+      elsif data.is_a?(Array)
+        data.map { |d| convert_data(d) }  # [ "", [] , nil].flatten -> ["", nil]
+      else
+        data
+      end
+    end
+
+		def prepare_message data    
+			data =  convert_data(data).tws unless data.is_a?(String) && data[-1]== EOL
 			matrize = [data.size,data]
 			if block_given?	    # A user defined decoding-sequence is accepted via block
 				matrize.pack yield

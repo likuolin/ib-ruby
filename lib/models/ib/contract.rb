@@ -98,8 +98,8 @@ module IB
       validates_inclusion_of :sec_type, :in => CODES[:sec_type].keys,
       :message => "should be valid security type"
 
-    validates_format_of :expiry, :with => /\A\d{6}$|^\d{8}$|\A\z/,
-      :message => "should be YYYYMM or YYYYMMDD"
+#    validates_format_of :expiry, :with => /\A\d{6}$|^\d{8}$|\A\z/,
+#      :message => "should be YYYYMM or YYYYMMDD"
 
     validates_format_of :primary_exchange, :without => /SMART/,
       :message => "should not be SMART"
