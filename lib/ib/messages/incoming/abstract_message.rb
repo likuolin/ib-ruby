@@ -81,8 +81,7 @@ module IBSupport
 			if the_string.blank?
 				return nil
 			else 
-				puts the_string				
-					return Date.parse(the_string)				
+				return Date.parse(the_string)				
 			end
 		end
 		#    def read_array
