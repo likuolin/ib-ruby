@@ -330,7 +330,7 @@ In places where these terms are used to indicate a concept, we have left them as
 			if self.last_trading_day.present?
 				last_trading_day.gsub(/-/,'')
 			else
-				@attributes[:expiry]
+				@attributes['expiry']
 			end
 		end
 
