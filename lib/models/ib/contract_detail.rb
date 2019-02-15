@@ -76,14 +76,12 @@ module IB
       # Extra validations
 
     #LIKUO EDIT
-      #validates_format_of :time_zone, :with => /\A\w{3}\z/, :message => 'should be XXX'
-      # serialize :sec_id_list, Array
+      validates_format_of :time_zone, :with => /\A\w{3}\z/, :message => 'should be XXX'
+      serialize :sec_id_list, Array
     #LIKUO EDIT
 
 
-    validates_format_of :time_zone, :with => /\A\w{3}\z/, :message => 'should be XXX'
-
-    serialize :sec_id_list, Hash
+    #serialize :sec_id_list, Hash
 
 
     belongs_to :contract
