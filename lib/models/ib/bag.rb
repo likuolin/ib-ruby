@@ -18,7 +18,7 @@ module IB
     validates_format_of :expiry, :with => /\A\z/, :message => "should be blank"
 
     def default_attributes
-      super.merge :sec_type => :bag #,:legs => Array.new,
+      super.merge :sec_type => :bag, :legs => Array.new,
     end
 
 #    def description
