@@ -22,8 +22,7 @@ module IB
 
 
 
-=begin
-Account#LocateOrder
+=begin rdoc
 given any key of local_id, perm_id or order_ref
 and an optional status, which can be a string or a 
 regexp ( status: /mitted/ matches Submitted and Presubmitted) 
@@ -55,9 +54,10 @@ Thus if several Orders are placed with the same order_ref, the active one is ret
 
 
 =begin rdoc 
-Account#PlaceOrder
 requires an IB::Order as parameter. 
+
 If attached, the associated IB::Contract is used to specify the tws-command
+
 The associated Contract overtakes  the specified (as parameter)
 
 auto_adjust: Limit- and Aux-Prices are adjusted to Min-Tick
@@ -122,8 +122,8 @@ Example
 				order.auto_adjust # if auto_adjust  /defined in lib/order_handling
 			end
 			if convert_size 
-			 	order.action =  order.total_quantity.to_i > 0  ? 	:buy  : :sell 
-				order.total_quantity =  order.total_quantity.to_i.abs
+			 	order.action = order.total_quantity.to_i > 0  ? 	:buy : :sell 
+				order.total_quantity  = order.total_quantity.to_i.abs
 			end
 				# apply non_guarenteed and other stuff bound to the contract to order.
 			order.attributes.merge! order.contract.order_requirements unless order.contract.order_requirements.blank?
@@ -145,9 +145,8 @@ Example
 		#  account.modify order: {}
 		alias place place_order
 
-=begin
-Account#ModifyOrder
-operates in two modi:
+=begin #rdoc
+Account#ModifyOrder operates in two modi:
 
 First: The order is specified  via local_id, perm_id or order_ref.
 	It is checked, whether the order is still modificable.
@@ -191,18 +190,25 @@ This has to be done manualy in the provided block
 	def preview order:, contract: nil, **args_which_are_ignored
 		# to_do:  use a copy of order instead of temporary setting order.what_if
 		result = ->(l){ orders.detect{|x| x.local_id == l  && x.submitted? } }
-		order.what_if =  true
+		order.what_if = true
 		the_local_id = place_order order: order, contract: contract
 		Timeout::timeout(1, IB::TransmissionError,"(Preview-)Order is not transmitted properly" ) do
 			loop{  sleep 0.1;  break if  result[the_local_id] }  
 		end
-		order.what_if =  false # reset what_if flag
-		order.local_id =  nil  # reset local_id to enable reusage of the order-object for placing
+		order.what_if = false # reset what_if flag
+		order.local_id = nil  # reset local_id to enable reusage of the order-object for placing
 		result[the_local_id].order_state.forcast  #  return_value
 	end 
 
 # closes the contract by submitting an appropiate order
 	# the action- and total_amount attributes of the assigned order are overwritten.
+	#
+	# if a ratio-value (0 ..1) is specified in _order.total_quantity_ only a fraction of the position is closed. 
+	# Other values are silently ignored
+	#
+	# if _reverse_ is specified, the opposide position is established. 
+	# Any value in total_quantity is overwritten 
+	#
 	# returns the order transmitted
 	#
 	# raises an IB::Error if no PortfolioValues have been loaded to the IB::Acoount
@@ -211,23 +217,29 @@ This has to be done manualy in the provided block
 		contract_size = ->(c) do			# note: portfolio_value.position is either positiv or negativ
 			if c.con_id <0 # Spread
 				p = portfolio_values.detect{|p| p.contract.con_id ==c.legs.first.con_id} &.position.to_i
-				p/ c.combo_legs.first.weight  unless p.zero?
+				p/ c.combo_legs.first.weight  unless p.to_i.zero?
 			else
 				portfolio_values.detect{|x| x.contract.con_id == c.con_id} &.position.to_i   # nil.to_i -->0
 			end
 		end
 
-		contract &.verify{|c| order.contract = c}   # don't touch the parameter, get a new object 
-		puts order.contract.inspect
+		contract &.verify{|c| order.contract = c}   # if contract is specified: don't touch the parameter, get a new object . 
 		error "Cannot transmit the order – No Contract given " unless order.contract.is_a?(IB::Contract)
-		order.total_quantity = -contract_size[order.contract]
-		if order.total_quantity.zero?
+	
+		the_quantity = if reverse
+														 -contract_size[order.contract] * 2 
+													 elsif order.total_quantity.abs < 1 && !order.total_quantity.zero? 
+														-contract_size[order.contract] *  order.total_quantity.abs 
+													 else
+														 -contract_size[order.contract] 
+													 end
+		if the_quantity.zero?
 			logger.info{ "Cannot close #{order.contract.to_human} - no position detected"}
 		else
-			order.total_quantity = order.total_quantity * 2 if reverse
-			order.action = nil
-			order.local_id = nil  # in any case, close is a new order
-			logger.info { "Order modified to close position: #{order.to_human}" }
+			order.total_quantity = the_quantity
+			order.action =  nil
+			order.local_id =  nil  # in any case, close is a new order
+			logger.info { "Order modified to close, reduce or revese position: #{order.to_human}" }
 			place order: order, convert_size: true
 		end
 	end
