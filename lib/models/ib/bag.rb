@@ -12,13 +12,14 @@ module IB
     # 2. :symbol => "USD" For combo Contract, this is an arbitrary value (like "USD")
 
     validates_format_of :sec_type, :with => /\Abag\z/, :message => "should be a bag"
+    has_many :legs, :class_name => 'ComboLeg'
     #LIKUO EDIT
     #does not work for VIX bag
     #validates_format_of :right, :with => /\Anone\z/, :message => "should be none"
     validates_format_of :expiry, :with => /\A\z/, :message => "should be blank"
 
     def default_attributes
-      super.merge :sec_type => :bag, :legs => Array.new,
+      super.merge :sec_type => :bag, :legs => Array.new
     end
 
 #    def description
@@ -39,11 +40,13 @@ module IB
     # TODO: Find a way to serialize legs without references...
     # IB-equivalent leg description.
     def legs_description
-      self[:legs_description] || combo_legs.map { |the_leg| "#{the_leg.con_id}|#{the_leg.weight}" }.join(',')
+      self[:legs_description] || legs.map { |leg| "#{leg.con_id}|#{leg.weight}" }.join(',')
+      #self[:legs_description] || combo_legs.map { |the_leg| "#{the_leg.con_id}|#{the_leg.weight}" }.join(',')
     end
 
     # Check if two Contracts have same legs (maybe in different order)
     def same_legs? other
+      legs == other.legs ||
       combo_legs == other.combo_legs ||
         legs_description.split(',').sort == other.legs_description.split(',').sort
     end
