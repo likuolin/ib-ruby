@@ -13,6 +13,7 @@ module IB
 
     validates_format_of :sec_type, :with => /\Abag\z/, :message => "should be a bag"
     has_many :legs, :class_name => 'ComboLeg'
+    
     #LIKUO EDIT
     #does not work for VIX bag
     #validates_format_of :right, :with => /\Anone\z/, :message => "should be none"
