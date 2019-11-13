@@ -392,7 +392,12 @@ module IB
 				# Create new instance of the appropriate message type,
 				# and have it read the message from socket.
 				# NB: Failure here usually means unsupported message type received
-				logger.error { "Got unsupported message #{msg_id}" } unless Messages::Incoming::Classes[msg_id]
+				unless Messages::Incoming::Classes[msg_id]
+					logger.error { "Got unsupported message #{msg_id}" } 
+					#just return for now
+					return
+				end
+
 				error "Something strange happened - Reader has to be restarted" , :reader if msg_id.to_i.zero?
 				msg = Messages::Incoming::Classes[msg_id].new(the_decoded_message)
 
