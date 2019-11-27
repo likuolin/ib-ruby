@@ -49,7 +49,7 @@ module IB
                ## Support for per-leg prices in Order
                [contract.combo_legs.size] + contract.combo_legs.map { |_| nil }, #(&:price) ,
                ## Support for combo routing params in Order
-               order.combo_params.empty? ? 0 : [order.combo_params.size] + order.combo_params.to_a
+               (order.combo_params == "[]" || order.combo_params.empty?) ? 0 : [order.combo_params.size] + order.combo_params.to_a
 	     ]
 	        else     
 	          []    

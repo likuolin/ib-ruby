@@ -415,9 +415,9 @@ Format of serialisation
 	for each condition: conditiontype, condition-fields
 =end
 		def serialize_conditions
-			if conditions.empty?
+			if conditions.empty? || conditions == '[]'
 			0
-			else
+			else                  
 			[ conditions.count ]	+ conditions.map( &:serialize )+  [ conditions_ignore_rth, conditions_cancel_order]
 			end
 		end
