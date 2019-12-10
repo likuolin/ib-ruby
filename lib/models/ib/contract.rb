@@ -80,18 +80,18 @@ module IB
    # has_one :combo, :class_name => 'Contract', :through => :leg
 
     # for Combo/BAG Contracts that contain ComboLegs
-    has_many :combo_legs#, :foreign_key => :combo_id
- #   has_many :leg_contracts, :class_name => 'Contract', :through => :combo_legs
-#    alias legs combo_legs
- #   alias legs= combo_legs=
+    has_many :combo_legs, :foreign_key => :combo_id
+    has_many :leg_contracts, :class_name => 'Contract', :through => :combo_legs
+    alias legs combo_legs
+    alias legs= combo_legs=
 
-  #    alias combo_legs_description legs_description
-  #  alias combo_legs_description= legs_description=
+    alias combo_legs_description legs_description
+    alias combo_legs_description= legs_description=
 
       # for Delta-Neutral Combo Contracts
       has_one :underlying
-    alias under_comp underlying
-    alias under_comp= underlying=
+      alias under_comp underlying
+      alias under_comp= underlying=
 
 
       ### Extra validations
@@ -101,8 +101,8 @@ module IB
 #    validates_format_of :expiry, :with => /\A\d{6}$|^\d{8}$|\A\z/,
 #      :message => "should be YYYYMM or YYYYMMDD"
 
-    validates_format_of :primary_exchange, :without => /SMART/,
-      :message => "should not be SMART"
+    # validates_format_of :primary_exchange, :without => /SMART/,
+    #   :message => "should not be SMART"
 
     validates_format_of :sec_id_type, :with => /ISIN|SEDOL|CUSIP|RIC|\A\z/,
       :message => "should be valid security identifier"

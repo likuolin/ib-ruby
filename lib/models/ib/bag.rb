@@ -12,7 +12,7 @@ module IB
     # 2. :symbol => "USD" For combo Contract, this is an arbitrary value (like "USD")
 
     validates_format_of :sec_type, :with => /\Abag\z/, :message => "should be a bag"
-    has_many :combo_legs, :class_name => 'ComboLeg'
+    has_many :combo_legs, :class_name => 'ComboLeg', foreign_key: 'combo_id'
     
     #LIKUO EDIT
     #does not work for VIX bag

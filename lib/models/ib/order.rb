@@ -296,7 +296,7 @@ module IB
     serialize :mics_options, Hash
 
     # Order is always placed for a contract. Here, we explicitly set this link.
-    belongs_to :contract
+    belongs_to :contract, optional: true
 
     # Order has a collection of Executions if it was filled
     has_many :executions

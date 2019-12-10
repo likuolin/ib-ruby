@@ -6,7 +6,7 @@ module IB
     include BaseProperties
 
     # BAG Combo Contract that contains this Leg
-    belongs_to :combo, :class_name => 'Contract'
+    belongs_to :combo, :class_name => 'Contract', optional: true
     # Contract that constitutes this Leg
     belongs_to :leg_contract, :class_name => 'Contract', :foreign_key => :leg_contract_id
 
@@ -40,7 +40,7 @@ module IB
     alias_method :conid, :con_id
 
     # Extra validations
-    validates_numericality_of :ratio, :con_id
+    #validates_numericality_of :ratio, :con_id
     validates_format_of :designated_location, :with => /\A\z/,
       :message => "should be blank or orders will be rejected"
 
