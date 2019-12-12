@@ -4,7 +4,7 @@ module IB
   class Execution < IB::Model
     include BaseProperties
 
-    belongs_to :order
+    belongs_to :order, optional: true
 
     prop :local_id, #   int: order id. TWS orders have a fixed order id of 0.
       :client_id, #     int: client id. TWS orders have a fixed client id of 0.
